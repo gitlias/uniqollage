@@ -1,6 +1,7 @@
 import { useStore } from '../store';
 import { compose } from '../render/collage';
 import { garmentColor, productById, sizeOf, type Shape, type SizeSpec } from '../products';
+import { PALETTES } from '../render/tiles';
 import { PrimEl, TileView } from './TileView';
 
 // Flat-lay silhouettes drawn to the official garment measurements (mm), with the
@@ -132,6 +133,35 @@ export function Mockup() {
         <svg className="canvas" viewBox={`${-20} ${-20} ${c.w + 40} ${c.h + 40}`}>
           <rect width={c.w} height={c.h} fill={color.hex} />
           <svg width={c.w} height={c.h} viewBox={`0 0 ${c.w} ${c.h}`} overflow="hidden">
+            {design}
+          </svg>
+        </svg>
+      </div>
+    );
+  }
+
+  if (product.shape === 'poster') {
+    // Framed on a wall; the frame and wall scale with the poster.
+    const f = Math.max(c.w, c.h) * 0.03;
+    const wall = Math.max(c.w, c.h) * 0.25;
+    const W = c.w + 2 * (f + wall);
+    const H = c.h + 2 * (f + wall);
+    return (
+      <div className="canvas-wrap">
+        <svg className="canvas mockup" viewBox={`0 0 ${W} ${H}`}>
+          <defs>
+            <filter id="frameShadow" x="-10%" y="-10%" width="120%" height="125%">
+              <feDropShadow dx="0" dy={f * 0.5} stdDeviation={f * 0.6} floodOpacity="0.28" />
+            </filter>
+            <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#efece6" />
+              <stop offset="1" stopColor="#e2ded6" />
+            </linearGradient>
+          </defs>
+          <rect width={W} height={H} fill="url(#wall)" />
+          <rect x={wall} y={wall} width={c.w + 2 * f} height={c.h + 2 * f} fill="#1f1f1f" filter="url(#frameShadow)" />
+          <rect x={wall + f} y={wall + f} width={c.w} height={c.h} fill={PALETTES[project.theme].page} />
+          <svg x={wall + f} y={wall + f} width={c.w} height={c.h} viewBox={`0 0 ${c.w} ${c.h}`} overflow="hidden">
             {design}
           </svg>
         </svg>

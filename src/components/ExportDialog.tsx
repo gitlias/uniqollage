@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { useT } from '../i18n';
 import { exportAttribution, exportPdf, exportPng, exportSvg } from '../export/export';
-import { exportPixels, garmentColor, printArea, productById, sizeOf, UPLOAD_TARGETS, type UploadTargetId } from '../products';
+import { areaOf, exportPixels, garmentColor, isPoster, productById, sizeOf, UPLOAD_TARGETS, type UploadTargetId } from '../products';
 
 function mb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -16,14 +16,17 @@ export function ExportDialog() {
   const close = () => useUi.getState().setExportOpen(false);
   // German stores do not document upload limits; the stricter international
   // limit (2048×2048 px, 2 MB) is safe everywhere.
-  const [target, setTarget] = useState<UploadTargetId>(p.region === 'jp' ? 'utme-jp' : 'utme-intl');
+  const poster = isPoster(p.productId);
+  const [target, setTarget] = useState<UploadTargetId>(poster ? 'print-300' : p.region === 'jp' ? 'utme-jp' : 'utme-intl');
+  const [bleed, setBleed] = useState(true);
+  const bleedMm = poster && bleed ? 3 : 0;
   const [transparent, setTransparent] = useState(true);
   const [keepWhite, setKeepWhite] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [lastSize, setLastSize] = useState<number | null>(null);
   const product = productById(p.productId);
   const size = sizeOf(p.productId, p.sizeId);
-  const area = printArea(p.productId, p.customArea, p.sizeId);
+  const area = areaOf(p);
   const px = exportPixels(area, target);
   const limit = UPLOAD_TARGETS.find((x) => x.id === target)!.maxBytes;
   const garment = garmentColor(p.garment);
@@ -46,18 +49,18 @@ export function ExportDialog() {
         <p className="muted small">
           {product.name[uiLang]}
           {product.id !== 'custom' && product.sizes.length > 1 ? ` ${size.id}` : ''} · {t('width')} {area.w} × {t('height')} {area.h} mm
-          {product.id !== 'custom' ? ` · ${size.top} mm ${uiLang === 'de' ? 'unter Kragen/Oberkante' : 'below collar/top edge'}` : ''}
+          {product.id !== 'custom' && !poster ? ` · ${size.top} mm ${uiLang === 'de' ? 'unter Kragen/Oberkante' : 'below collar/top edge'}` : ''}
         </p>
         {size.estimated && <p className="msg warning">{t('estimated')}</p>}
-        {garment.dark && p.theme === 'light' && <p className="msg warning">{t('darkOnDark')}</p>}
-        {!garment.dark && p.theme === 'dark' && <p className="msg warning">{t('lightOnLight')}</p>}
+        {!poster && garment.dark && p.theme === 'light' && <p className="msg warning">{t('darkOnDark')}</p>}
+        {!poster && !garment.dark && p.theme === 'dark' && <p className="msg warning">{t('lightOnLight')}</p>}
         <section>
-          <h3>{t('exportPng')}</h3>
-          <p className="muted small">{t('exportPngHint')}</p>
+          <h3>{poster ? 'PNG' : t('exportPng')}</h3>
+          <p className="muted small">{poster ? t('posterPngHint') : t('exportPngHint')}</p>
           <label>
             {t('target')}
             <select value={target} onChange={(e) => setTarget(e.target.value as UploadTargetId)}>
-              {UPLOAD_TARGETS.map((x) => (
+              {UPLOAD_TARGETS.filter((x) => !poster || x.id.startsWith('print')).map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name[uiLang]}
                 </option>
@@ -68,12 +71,16 @@ export function ExportDialog() {
             <span className="muted small">
               {px.w} × {px.h} {t('pixels')} · {px.dpi} dpi
             </span>
-            <label className="check">
-              <input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> {t('transparent')}
-            </label>
-            <label className="check" title={t('protectWhiteHint')}>
-              <input type="checkbox" checked={keepWhite} onChange={(e) => setKeepWhite(e.target.checked)} /> {t('protectWhite')}
-            </label>
+            {!poster && (
+              <>
+                <label className="check">
+                  <input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> {t('transparent')}
+                </label>
+                <label className="check" title={t('protectWhiteHint')}>
+                  <input type="checkbox" checked={keepWhite} onChange={(e) => setKeepWhite(e.target.checked)} /> {t('protectWhite')}
+                </label>
+              </>
+            )}
           </div>
           <div className="row">
             <button
@@ -81,7 +88,7 @@ export function ExportDialog() {
               disabled={!!busy}
               onClick={() =>
                 run('png', async () => {
-                  setLastSize(await exportPng(p, uiLang, target, { transparent, keepWhite }));
+                  setLastSize(await exportPng(p, uiLang, target, { transparent, keepWhite: keepWhite && !poster }));
                 })
               }
             >
@@ -95,21 +102,32 @@ export function ExportDialog() {
             )}
           </div>
         </section>
+        {poster && (
+          <label className="check" title={t('bleedHint')}>
+            <input type="checkbox" checked={bleed} onChange={(e) => setBleed(e.target.checked)} /> {t('bleed')}
+          </label>
+        )}
         <section className="row wrap">
-          <button disabled={!!busy} onClick={() => run('svg', () => exportSvg(p, uiLang))}>
+          <button disabled={!!busy} onClick={() => run('svg', () => exportSvg(p, uiLang, bleedMm))}>
             {busy === 'svg' ? t('exporting') : `⬇ ${t('exportSvg')}`}
           </button>
-          <button disabled={!!busy} onClick={() => run('pdf', () => exportPdf(p, uiLang))}>
+          <button disabled={!!busy} onClick={() => run('pdf', () => exportPdf(p, uiLang, bleedMm))}>
             {busy === 'pdf' ? t('exporting') : `⬇ ${t('exportPdf')}`}
           </button>
           <button disabled={!!busy} onClick={() => run('txt', () => exportAttribution(p, uiLang))}>
             ⬇ {t('exportCredits')}
           </button>
         </section>
-        <p className="muted small">{t('areaNote')}</p>
-        <p className="muted small">
-          {t('protectWhiteHint')} {t('whiteOnWhite')}
-        </p>
+        {poster ? (
+          <p className="muted small">{t('posterNote')}</p>
+        ) : (
+          <>
+            <p className="muted small">{t('areaNote')}</p>
+            <p className="muted small">
+              {t('protectWhiteHint')} {t('whiteOnWhite')}
+            </p>
+          </>
+        )}
         <p className="muted small">{t('licenseNote')}</p>
         <div className="row end">
           <button onClick={close}>{t('close')}</button>

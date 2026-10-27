@@ -1,6 +1,6 @@
 import type { Project } from '../model';
-import { compose, compositionToSvg, type Composition } from '../render/collage';
-import { exportPixels, printArea, productById, type UploadTargetId } from '../products';
+import { compose, compositionToSvg, pageBackground, type Composition } from '../render/collage';
+import { areaOf, exportPixels, productById, type UploadTargetId } from '../products';
 
 // Exports. Remote images are fetched (Wikimedia serves CORS headers) and
 // normalised to PNG/JPEG data URLs so the SVG is self-contained, rasterises
@@ -61,12 +61,13 @@ async function inlineImages(c: Composition): Promise<Map<string, string>> {
 function baseName(p: Project): string {
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  return `uniqollage-${productById(p.productId).id}-${p.sizeId}-${stamp}`;
+  const size = p.sizeId.replace(/[^\w]+/g, '');
+  return `uniqollage-${productById(p.productId).id}-${size}${p.landscape && p.productId === 'poster' ? '-landscape' : ''}-${stamp}`;
 }
 
-export async function exportSvg(p: Project, lang: 'en' | 'de'): Promise<void> {
+export async function exportSvg(p: Project, lang: 'en' | 'de', bleed = 0): Promise<void> {
   const c = compose(p, lang);
-  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c) });
+  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c), background: pageBackground(p), bleed });
   download(new Blob([svg], { type: 'image/svg+xml' }), `${baseName(p)}.svg`);
 }
 
@@ -88,6 +89,10 @@ export async function renderPng(
   px: { w: number; h: number },
   opts: { background?: string; keepWhite?: boolean } = {},
 ): Promise<Blob> {
+  // Browsers refuse (or crash on) very large canvases.
+  if (px.w > 16384 || px.h > 16384 || px.w * px.h > 120e6) {
+    throw new Error(`${px.w} × ${px.h} px is too large for the browser – use 150 dpi or the PDF export.`);
+  }
   const c = compose(p, lang);
   const svg = compositionToSvg(c, { hrefMap: await inlineImages(c), background: opts.background });
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -112,16 +117,17 @@ export async function exportPng(
   target: UploadTargetId,
   opts: { transparent: boolean; keepWhite: boolean },
 ): Promise<number> {
-  const px = exportPixels(printArea(p.productId, p.customArea, p.sizeId), target);
-  const blob = await renderPng(p, lang, px, { background: opts.transparent ? undefined : '#ffffff', keepWhite: opts.keepWhite });
+  const px = exportPixels(areaOf(p), target);
+  const background = pageBackground(p) ?? (opts.transparent ? undefined : '#ffffff');
+  const blob = await renderPng(p, lang, px, { background, keepWhite: opts.keepWhite });
   download(blob, `${baseName(p)}-${px.w}x${px.h}.png`);
   return blob.size;
 }
 
-export async function exportPdf(p: Project, lang: 'en' | 'de'): Promise<void> {
+export async function exportPdf(p: Project, lang: 'en' | 'de', bleed = 0): Promise<void> {
   const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
   const c = compose(p, lang);
-  const svgText = compositionToSvg(c, { hrefMap: await inlineImages(c) });
+  const svgText = compositionToSvg(c, { hrefMap: await inlineImages(c), background: pageBackground(p), bleed });
   const el = new DOMParser().parseFromString(svgText, 'image/svg+xml').documentElement as unknown as SVGSVGElement;
   // svg2pdf needs the element in the document to resolve styles.
   const holder = document.createElement('div');
@@ -129,8 +135,10 @@ export async function exportPdf(p: Project, lang: 'en' | 'de'): Promise<void> {
   holder.appendChild(el);
   document.body.appendChild(holder);
   try {
-    const doc = new jsPDF({ unit: 'mm', format: [c.w, c.h], orientation: c.w > c.h ? 'landscape' : 'portrait' });
-    await svg2pdf(el, doc, { x: 0, y: 0, width: c.w, height: c.h });
+    const W = c.w + 2 * bleed;
+    const H = c.h + 2 * bleed;
+    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
+    await svg2pdf(el, doc, { x: 0, y: 0, width: W, height: H });
     download(doc.output('blob'), `${baseName(p)}.pdf`);
   } finally {
     holder.remove();

@@ -18,6 +18,8 @@ export interface Rendered {
 }
 
 export interface Palette {
+  /** Paper colour for posters. */
+  page: string;
   ink: string;
   title: string;
   link: string;
@@ -32,6 +34,7 @@ export interface Palette {
 /** Wikipedia (Vector) colours, and the night-mode variant for dark garments. */
 export const PALETTES: Record<Theme, Palette> = {
   light: {
+    page: '#ffffff',
     ink: '#202122',
     title: '#000000',
     link: '#3366cc',
@@ -43,6 +46,7 @@ export const PALETTES: Record<Theme, Palette> = {
     infoboxHead: '#dde6f3',
   },
   dark: {
+    page: '#101418',
     ink: '#eaecf0',
     title: '#f8f9fa',
     link: '#88a3e8',

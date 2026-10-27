@@ -12,7 +12,9 @@
 // Only the front can be printed. Regional services (EU, SG, PH…) use the same
 // garments; some regions document a 2048×2048 px / 2 MB upload instead.
 
-export type Shape = 'tee' | 'oversized' | 'sweat' | 'tote' | 'mini-tote' | 'none';
+import type { Project } from './model';
+
+export type Shape = 'tee' | 'oversized' | 'sweat' | 'tote' | 'mini-tote' | 'poster' | 'none';
 
 /**
  * UTme! regions. The German stores (Berlin, Köln, Hamburg, Frankfurt) sell
@@ -169,6 +171,33 @@ export const PRODUCTS: Product[] = [
     sizes: [{ id: 'F', w: 125, h: 140, top: 40, garment: { width: 350, length: 215 } }],
   },
   {
+    // Not a UTme! product: paper posters for any print shop, in common
+    // DIN, frame (Bilderrahmen) and US sizes. Portrait sizes; see `landscape`.
+    id: 'poster',
+    name: { en: 'Poster', de: 'Poster' },
+    shape: 'poster',
+    colors: ['white'],
+    defaultSize: 'A2',
+    regions: { de: {}, jp: {} },
+    sizes: (
+      [
+        ['A4', 210, 297],
+        ['A3', 297, 420],
+        ['A2', 420, 594],
+        ['A1', 594, 841],
+        ['A0', 841, 1189],
+        ['30×40 cm', 300, 400],
+        ['40×50 cm', 400, 500],
+        ['50×70 cm', 500, 700],
+        ['70×100 cm', 700, 1000],
+        ['11×17″', 279, 432],
+        ['17×22″', 432, 559],
+        ['18×24″', 457, 610],
+        ['24×36″', 610, 914],
+      ] as [string, number, number][]
+    ).map(([id, w, h]) => ({ id, w, h, top: 0, garment: { width: w, length: h } })),
+  },
+  {
     id: 'custom',
     name: { en: 'Custom size', de: 'Eigene Größe' },
     shape: 'none',
@@ -229,6 +258,16 @@ export const GARMENT_COLORS: GarmentColor[] = [
   { id: 'black', hex: '#1d1d1f', dark: true, name: { en: 'Black', de: 'Schwarz' } },
 ];
 
+export function isPoster(productId: string): boolean {
+  return productById(productId).shape === 'poster';
+}
+
+/** Print area of a project, honouring poster orientation. */
+export function areaOf(p: Project): { w: number; h: number } {
+  const a = printArea(p.productId, p.customArea, p.sizeId);
+  return isPoster(p.productId) && p.landscape ? { w: a.h, h: a.w } : a;
+}
+
 export function garmentColor(id: string): GarmentColor {
   return GARMENT_COLORS.find((c) => c.id === id) ?? GARMENT_COLORS[0];
 }
@@ -237,6 +276,7 @@ export function garmentColor(id: string): GarmentColor {
 export const UPLOAD_TARGETS = [
   { id: 'utme-jp', maxW: 2048, maxH: 2304, maxBytes: 5 * 1024 * 1024, name: { en: 'UTme! Japan (max. 2048 × 2304 px, ≈5 MB web / 10 MB app)', de: 'UTme! Japan (max. 2048 × 2304 px, ≈5 MB Web / 10 MB App)' } },
   { id: 'utme-intl', maxW: 2048, maxH: 2048, maxBytes: 2 * 1024 * 1024, name: { en: 'UTme! other regions (max. 2048 × 2048 px, ≤2 MB)', de: 'UTme! andere Länder (max. 2048 × 2048 px, ≤2 MB)' } },
+  { id: 'print-150', maxW: Infinity, maxH: Infinity, maxBytes: Infinity, name: { en: 'Large format, 150 dpi', de: 'Großformat, 150 dpi' } },
   { id: 'print-300', maxW: Infinity, maxH: Infinity, maxBytes: Infinity, name: { en: 'High resolution, 300 dpi (other print shops)', de: 'Hohe Auflösung, 300 dpi (andere Druckereien)' } },
 ] as const;
 
@@ -246,7 +286,7 @@ export type UploadTargetId = (typeof UPLOAD_TARGETS)[number]['id'];
 export function exportPixels(area: { w: number; h: number }, target: UploadTargetId): { w: number; h: number; dpi: number } {
   const t = UPLOAD_TARGETS.find((x) => x.id === target)!;
   if (!Number.isFinite(t.maxW)) {
-    const dpi = 300;
+    const dpi = t.id === 'print-150' ? 150 : 300;
     return { w: Math.round((area.w / 25.4) * dpi), h: Math.round((area.h / 25.4) * dpi), dpi };
   }
   const scale = Math.min(t.maxW / area.w, t.maxH / area.h); // px per mm

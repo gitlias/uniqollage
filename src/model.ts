@@ -87,6 +87,10 @@ export interface Project {
   sizeId: string;
   /** 'dark' = Wikipedia night mode palette, for black garments. */
   theme: Theme;
+  /** Posters only: landscape orientation. */
+  landscape?: boolean;
+  /** Posters only: white margin around the collage, mm. */
+  margin?: number;
   /** Only used when productId === 'custom'. */
   customArea: { w: number; h: number };
   /** Body text size in mm (cap height ≈ 0.7×). */

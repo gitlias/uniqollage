@@ -45,7 +45,7 @@ describe('products', () => {
 
 describe('regions', () => {
   it('offers exactly the German UTme! line-up', () => {
-    expect(productsIn('de').map((p) => p.id)).toEqual(['basic-t', 'kids-t', 'tote', 'mini-tote', 'custom']);
+    expect(productsIn('de').map((p) => p.id)).toEqual(['basic-t', 'kids-t', 'tote', 'mini-tote', 'poster', 'custom']);
     const tee = offerIn(productById('basic-t'), 'de');
     expect(tee.sizes.map((s) => s.id)).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']);
     expect(tee.colors).toEqual(['white']);

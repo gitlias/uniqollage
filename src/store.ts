@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
 import { arrange, shuffled } from './layout/pack';
 import { contentBox } from './render/collage';
-import { garmentColor, offerIn, printArea, productById, productsIn } from './products';
+import { areaOf, garmentColor, offerIn, productById, productsIn } from './products';
 
 export function emptyProject(): Project {
   return {
@@ -11,6 +11,8 @@ export function emptyProject(): Project {
     productId: 'basic-t',
     sizeId: 'M',
     theme: 'light',
+    landscape: false,
+    margin: 15,
     customArea: { w: 250, h: 320 },
     baseSize: 3,
     autoSize: true,
@@ -111,7 +113,7 @@ export const useStore = create<State>((set, get) => ({
   },
   addTiles(drafts) {
     const { project, autoLayout } = get();
-    const area = printArea(project.productId, project.customArea, project.sizeId);
+    const area = areaOf(project);
     const tiles: Tile[] = drafts.map(
       (d, i) =>
         ({

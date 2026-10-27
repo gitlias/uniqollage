@@ -34,6 +34,9 @@ files.
   *Germany* (T-shirt adults XXS–3XL, T-shirt kids 110–160, tote, mini tote –
   white/off white, with prices) or *Japan* (adds U Crew Neck T, AIRism
   oversized T, sweatshirt, black). See [docs/utme-research.md](docs/utme-research.md).
+- **Posters** – DIN A4–A0, frame sizes (30×40 to 70×100 cm) and US sizes
+  (11×17″ to 24×36″, incl. Kleinian's 17×22″), portrait/landscape, white
+  margin, vector PDF with 3 mm bleed for print shops, framed wall mockup.
 - **Export** – transparent PNG sized to the UTme! upload limits
   (2048 × 2304 px Japan, 2048 × 2048 px other regions, or 300 dpi), with a
   file-size check and protection against UTme! dropping pure white; vector
@@ -60,6 +63,23 @@ npm test           # unit tests (vitest)
 npm run build      # static site in dist/
 npm run e2e        # browser smoke test with mocked Wikipedia (needs Playwright + a running `npm run preview`)
 ```
+
+## Deployment
+
+Uniqollage is a static site (`npm run build` → `dist/`) without a backend, so
+any static host works: GitHub Pages, Netlify, Cloudflare Pages, Vercel or a
+plain web server. `vite.config.ts` uses `base: './'`, so it also works from a
+sub-path.
+
+**GitHub Pages** (`.github/workflows/pages.yml`): every push to `main` runs
+the tests, builds and deploys. One-time setup: *Settings → Pages → Source:
+GitHub Actions*. Pages for **private** repositories needs a paid plan
+(GitHub Pro/Team/Enterprise); the published site is public either way, except
+with Enterprise Cloud access control.
+
+**Netlify / Cloudflare Pages / Vercel**: connect the repository, build command
+`npm run build`, output directory `dist`. These also deploy from private
+repositories on their free plans.
 
 ### How rendering works
 

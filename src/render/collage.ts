@@ -1,5 +1,5 @@
 import type { Project, Tile } from '../model';
-import { printArea } from '../products';
+import { areaOf, isPoster } from '../products';
 import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
 import { PALETTES, renderTile, type Prim } from './tiles';
@@ -9,11 +9,22 @@ export function creditSize(area: { w: number }): number {
   return Math.min(3, Math.max(1.6, area.w / 140));
 }
 
-/** Area available to tiles (print area minus the optional credit strip). */
+/** White margin around poster collages (0 for garments and bags). */
+export function marginOf(p: Project): number {
+  return isPoster(p.productId) ? Math.max(0, p.margin ?? 0) : 0;
+}
+
+/** Area available to tiles (print area minus margin and the optional credit strip). */
 export function contentBox(p: Project): Box {
-  const area = printArea(p.productId, p.customArea, p.sizeId);
+  const area = areaOf(p);
+  const m = marginOf(p);
   const strip = p.credit ? creditSize(area) * 2.2 : 0;
-  return { x: 0, y: 0, w: area.w, h: area.h - strip };
+  return { x: m, y: m, w: area.w - 2 * m, h: area.h - 2 * m - strip };
+}
+
+/** Background to export: paper colour for posters, transparent otherwise. */
+export function pageBackground(p: Project): string | undefined {
+  return isPoster(p.productId) ? PALETTES[p.theme].page : undefined;
 }
 
 export function creditText(p: Project, lang: 'en' | 'de'): string {
@@ -60,7 +71,8 @@ export interface Composition {
 }
 
 export function compose(p: Project, lang: 'en' | 'de'): Composition {
-  const area = printArea(p.productId, p.customArea, p.sizeId);
+  const area = areaOf(p);
+  const m = marginOf(p);
   const muted = PALETTES[p.theme].muted;
   const placed = p.tiles.map((tile) => {
     const r = renderTile(tile, p.baseSize, p.theme);
@@ -71,12 +83,13 @@ export function compose(p: Project, lang: 'en' | 'de'): Composition {
     const text = creditText(p, lang);
     if (text) {
       const size = creditSize(area);
-      const block = layoutText(parseMarkup(text), area.w, { size, lineHeight: 1.3, color: muted, align: 'center' });
+      const w = area.w - 2 * m;
+      const block = layoutText(parseMarkup(text), w, { size, lineHeight: 1.3, color: muted, align: 'center' });
       // Shrink to a single line if needed.
-      const scale = block.lines > 1 ? Math.max(0.55, area.w / (block.maxLineWidth * 1.02 + 1)) : 1;
-      const final = scale < 1 ? layoutText(parseMarkup(text), area.w, { size: size * scale, lineHeight: 1.3, color: muted, align: 'center' }) : block;
-      const y = area.h - final.height;
-      for (const pth of final.paths) credit.push({ t: 'path', d: pth.d, fill: pth.fill, x: 0, y });
+      const scale = block.lines > 1 ? Math.max(0.55, w / (block.maxLineWidth * 1.02 + 1)) : 1;
+      const final = scale < 1 ? layoutText(parseMarkup(text), w, { size: size * scale, lineHeight: 1.3, color: muted, align: 'center' }) : block;
+      const y = area.h - m - final.height;
+      for (const pth of final.paths) credit.push({ t: 'path', d: pth.d, fill: pth.fill, x: m, y });
     }
   }
   return { w: area.w, h: area.h, placed, credit };
@@ -112,12 +125,17 @@ export function primToSvg(p: Prim, hrefMap?: Map<string, string>): string {
 }
 
 /** Standalone SVG document in millimetres. */
-export function compositionToSvg(c: Composition, opts: { hrefMap?: Map<string, string>; background?: string } = {}): string {
+/**
+ * Standalone SVG document in millimetres. `bleed` (mm) extends the page on
+ * every side for print shops; only the background reaches into it.
+ */
+export function compositionToSvg(c: Composition, opts: { hrefMap?: Map<string, string>; background?: string; bleed?: number } = {}): string {
+  const b = opts.bleed ?? 0;
   const parts: string[] = [];
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${r3(c.w)}mm" height="${r3(c.h)}mm" viewBox="0 0 ${r3(c.w)} ${r3(c.h)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${r3(c.w + 2 * b)}mm" height="${r3(c.h + 2 * b)}mm" viewBox="${r3(-b)} ${r3(-b)} ${r3(c.w + 2 * b)} ${r3(c.h + 2 * b)}">`,
   );
-  if (opts.background) parts.push(`<rect width="${r3(c.w)}" height="${r3(c.h)}" fill="${opts.background}"/>`);
+  if (opts.background) parts.push(`<rect x="${r3(-b)}" y="${r3(-b)}" width="${r3(c.w + 2 * b)}" height="${r3(c.h + 2 * b)}" fill="${opts.background}"/>`);
   for (const pl of c.placed) {
     parts.push(`<g transform="${tileTransform(pl.tile, pl.h)}">`);
     for (const p of pl.prims) parts.push(primToSvg(p, opts.hrefMap));

@@ -116,7 +116,7 @@ await step('mockups', async () => {
   await page.click('.page-tabs button >> text=Preview on product');
   await page.screenshot({ path: `${out}/mockup-tshirt.png` });
   const deProducts = await page.locator('.toolbar select').nth(1).locator('option').allTextContents();
-  if (deProducts.length !== 5 || deProducts.some((x) => /Sweat|AIRism|U Crew/.test(x))) throw new Error(`DE products: ${deProducts}`);
+  if (deProducts.length !== 6 || deProducts.some((x) => /Sweat|AIRism|U Crew/.test(x))) throw new Error(`DE products: ${deProducts}`);
   await page.selectOption(size, '3XL');
   await page.waitForSelector('.toolbar .estimated');
   await page.selectOption(region, 'jp');
@@ -136,6 +136,16 @@ await step('mockups', async () => {
   await page.screenshot({ path: `${out}/mockup-mini.png` });
   await page.selectOption(product, 'kids-t');
   await page.screenshot({ path: `${out}/mockup-kids.png` });
+  await page.selectOption(product, 'poster');
+  await page.selectOption(size, 'A2');
+  await page.click('.toolbar .seg button >> text=Landscape');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/mockup-poster.png` });
+  await page.click('header button.primary');
+  const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.modal button >> text=PDF (vector)')]);
+  await pdf.saveAs(`${out}/poster.pdf`);
+  await page.click('.modal button >> text=Close');
+  await page.click('.toolbar .seg button >> text=Portrait');
   await page.selectOption(product, 'basic-t');
   await page.selectOption(size, 'M');
   await page.click('.page-tabs button >> text=Edit');

@@ -355,14 +355,17 @@ main.content {
 }
 .toolbar .group {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  min-width: 0;
 }
 .toolbar .group + .group {
   border-left: 1px solid var(--line);
   padding-left: 14px;
 }
 .toolbar label {
+  white-space: nowrap;
   display: flex;
   gap: 6px;
   align-items: center;

@@ -68,6 +68,28 @@ export function Toolbar() {
             {offer.sizes[0].w / 10}×{offer.sizes[0].h / 10} cm
           </span>
         )}
+        {product.shape === 'poster' && (
+          <>
+            <div className="seg" role="group" aria-label={t('orientation')}>
+              <button className={!p.landscape ? 'on' : ''} onClick={() => updateAndRelayout((x) => ({ ...x, landscape: false }))}>
+                {t('portrait')}
+              </button>
+              <button className={p.landscape ? 'on' : ''} onClick={() => updateAndRelayout((x) => ({ ...x, landscape: true }))}>
+                {t('landscape')}
+              </button>
+            </div>
+            <label>
+              {t('margin')}
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={p.margin ?? 0}
+                onChange={(e) => updateAndRelayout((x) => ({ ...x, margin: Math.min(100, Math.max(0, Number(e.target.value))) }))}
+              />
+            </label>
+          </>
+        )}
         {p.productId === 'custom' && (
           <>
             <label>
@@ -123,9 +145,9 @@ export function Toolbar() {
         </button>
       </div>
       <div className="group">
-        <span className="muted">{t('garment')}</span>
+        {offer.colors.length > 1 && <span className="muted">{t('garment')}</span>}
         <div className="swatches">
-          {offer.colors.map((id) => {
+          {(offer.colors.length > 1 ? offer.colors : []).map((id) => {
             const g = garmentColor(id);
             return (
               <button
