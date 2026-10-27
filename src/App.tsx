@@ -36,6 +36,18 @@ const TAB_VIEWS: Record<SourceTab, JSX.Element> = {
   upload: <UploadTab />,
 };
 
+/** Slim bar shown in place of a collapsed side panel. */
+function PanelRail({ side, label }: { side: 'left' | 'right'; label: string }) {
+  const t = useT();
+  const toggle = side === 'left' ? useUi.getState().toggleLeft : useUi.getState().toggleRight;
+  return (
+    <button className={`panel-rail ${side}`} onClick={toggle} title={t('expand')} aria-label={`${t('expand')}: ${label}`}>
+      <span>{side === 'left' ? '»' : '«'}</span>
+      <span className="rail-label">{label}</span>
+    </button>
+  );
+}
+
 export function App() {
   const t = useT();
   const uiLang = useStore((s) => s.uiLang);
@@ -48,6 +60,8 @@ export function App() {
   const view = useUi((s) => s.view);
   const setView = useUi((s) => s.setView);
   const exportOpen = useUi((s) => s.exportOpen);
+  const leftOpen = useUi((s) => s.leftOpen);
+  const rightOpen = useUi((s) => s.rightOpen);
   const fillOpen = useUi((s) => s.fillOpen);
   const fileInput = useRef<HTMLInputElement>(null);
   const [headerQ, setHeaderQ] = useState('');
@@ -57,7 +71,7 @@ export function App() {
   useEffect(() => setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab))), [tab]);
 
   return (
-    <div className="app">
+    <div className={`app${leftOpen ? '' : ' left-collapsed'}${rightOpen ? '' : ' right-collapsed'}`}>
       <header className="vector-header">
         <div className="header-start">
           <span className="wordmark" aria-label="Uniqollage">
@@ -124,8 +138,14 @@ export function App() {
         </nav>
       </header>
 
-      <aside className="sources vector-menu">
-        <div className="menu-heading">{t('factBank')}</div>
+      {!leftOpen && <PanelRail side="left" label={t('factBank')} />}
+      <aside className="sources vector-menu" hidden={!leftOpen}>
+        <div className="menu-heading">
+          {t('factBank')}
+          <button className="panel-toggle" onClick={() => useUi.getState().toggleLeft()} title={t('collapse')} aria-label={t('collapse')}>
+            «
+          </button>
+        </div>
         <nav className="tabs">
           {TABS.map(([id, key]) => (
             <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
@@ -182,7 +202,7 @@ export function App() {
         </footer>
       </main>
 
-      <Inspector />
+      {rightOpen ? <Inspector /> : <PanelRail side="right" label={t('tools')} />}
       {exportOpen && <ExportDialog />}
       {fillOpen && <FillDialog />}
     </div>

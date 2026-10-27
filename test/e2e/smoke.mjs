@@ -204,6 +204,42 @@ await step('fill randomly', async () => {
   await page.screenshot({ path: `${out}/filled.png` });
 });
 
+await step('collapse panels and zoom the canvas', async () => {
+  const canvasWidth = async () => (await page.locator('.canvas-wrap').boundingBox()).width;
+  const before = await canvasWidth();
+  await page.click('.sources .panel-toggle');
+  await page.click('.inspector .panel-toggle');
+  await page.waitForSelector('.panel-rail.left');
+  const wide = await canvasWidth();
+  if (wide < before + 400) throw new Error(`canvas did not grow: ${before} → ${wide}`);
+  const vb0 = await page.getAttribute('svg.canvas', 'viewBox');
+  await page.click('.zoom-controls button >> text=+');
+  await page.click('.zoom-controls button >> text=+');
+  const vb1 = await page.getAttribute('svg.canvas', 'viewBox');
+  const w = (vb) => Number(vb.split(' ')[2]);
+  if (!(w(vb1) < w(vb0) * 0.7)) throw new Error(`zoom did not change viewBox: ${vb0} → ${vb1}`);
+  // Ctrl + wheel zooms further, dragging the background pans.
+  const box = await page.locator('svg.canvas').boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 30);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -300);
+  await page.keyboard.up('Control');
+  const vb2 = await page.getAttribute('svg.canvas', 'viewBox');
+  if (!(w(vb2) < w(vb1))) throw new Error('ctrl+wheel did not zoom');
+  await page.mouse.move(box.x + 30, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 200, box.y + 160, { steps: 4 });
+  await page.mouse.up();
+  const vb3 = await page.getAttribute('svg.canvas', 'viewBox');
+  if (vb3 === vb2) throw new Error('drag did not pan');
+  await page.screenshot({ path: `${out}/zoomed-collapsed.png` });
+  await page.click('.zoom-level');
+  if ((await page.getAttribute('svg.canvas', 'viewBox')) !== vb0) throw new Error('fit did not reset');
+  await page.click('.panel-rail.left');
+  await page.click('.panel-rail.right');
+  await page.waitForSelector('.sources .tabs');
+});
+
 await step('autosave survives reload', async () => {
   const before = await page.locator('.tile-list li').count();
   await page.waitForTimeout(800);

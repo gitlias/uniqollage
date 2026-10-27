@@ -6,6 +6,7 @@ import { garmentColor, isPoster } from '../products';
 import { PALETTES } from '../render/tiles';
 import { useT } from '../i18n';
 import { useUi } from '../ui';
+import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
 
 type Gesture =
   | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number }
@@ -24,6 +25,8 @@ export function Canvas() {
 
   const c = compose(project, uiLang);
   const pad = Math.max(c.w, c.h) * 0.06;
+  const vb = useViewBox({ x: -pad, y: -pad, w: c.w + 2 * pad, h: c.h + 2 * pad });
+  const startPan = useZoomGestures(svgRef, vb);
   const sel = c.placed.find((p) => p.tile.id === selected);
   const overflow = c.placed.some((p) => p.tile.y + p.h > c.h + 0.5 || p.tile.x + p.tile.w > c.w + 0.5 || p.tile.x < -0.5 || p.tile.y < -0.5);
 
@@ -74,6 +77,12 @@ export function Canvas() {
       if (el.closest('input, textarea, select, [contenteditable]')) return;
       const s = useStore.getState();
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0')) {
+        e.preventDefault();
+        const { zoom, setZoom } = useUi.getState();
+        setZoom(e.key === '0' ? 1 : e.key === '-' ? zoom / 1.25 : zoom * 1.25, e.key === '0' ? null : undefined);
+        return;
+      }
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) s.redo();
@@ -108,18 +117,21 @@ export function Canvas() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const hs = Math.max(c.w, c.h) * 0.012; // handle size
+  const hs = Math.max(vb.w, vb.h) * 0.012; // handle size, constant on screen
 
   return (
     <div className="canvas-wrap">
       <svg
         ref={svgRef}
         className="canvas"
-        viewBox={`${-pad} ${-pad} ${c.w + 2 * pad} ${c.h + 2 * pad}`}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        onPointerDown={() => useStore.getState().select(null)}
+        onPointerDown={(e) => {
+          useStore.getState().select(null);
+          startPan(e);
+        }}
       >
         <defs>
           <filter id="pageShadow" x="-5%" y="-5%" width="110%" height="110%">
@@ -191,6 +203,7 @@ export function Canvas() {
           </g>
         )}
       </svg>
+      <ZoomControls />
       {!project.tiles.length && (
         <div className="canvas-empty">
           <p>{t('empty')}</p>

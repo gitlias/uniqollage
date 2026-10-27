@@ -1,5 +1,6 @@
 import type { Tile, ImageStyle } from '../model';
 import { useStore } from '../store';
+import { useUi } from '../ui';
 import { useT } from '../i18n';
 import { stripMarkup } from '../text/markup';
 
@@ -35,7 +36,12 @@ export function Inspector() {
 
   return (
     <aside className="inspector vector-menu">
-      <div className="menu-heading">{t('tools')}</div>
+      <div className="menu-heading">
+        {t('tools')}
+        <button className="panel-toggle" onClick={() => useUi.getState().toggleRight()} title={t('collapse')} aria-label={t('collapse')}>
+          »
+        </button>
+      </div>
       <h3>{t('inspector')}</h3>
       {!tile && <p className="muted small">{t('nothingSelected')}</p>}
       {tile && (

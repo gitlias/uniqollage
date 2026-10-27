@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { useStore } from '../store';
+import { useViewBox, useZoomGestures, ZoomControls, type Rect } from './zoom';
 import { compose } from '../render/collage';
 import { garmentColor, productById, sizeOf, type Shape, type SizeSpec } from '../products';
 import { PALETTES } from '../render/tiles';
@@ -108,6 +110,21 @@ function bagOutline(shape: Shape, s: SizeSpec): Outline {
   };
 }
 
+/** SVG with wheel/drag zoom and the zoom buttons. */
+function ZoomableSvg({ base, className, children }: { base: Rect; className: string; children: React.ReactNode }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const vb = useViewBox(base);
+  const startPan = useZoomGestures(ref, vb);
+  return (
+    <div className="canvas-wrap">
+      <svg ref={ref} className={className} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} onPointerDown={(e) => startPan(e)}>
+        {children}
+      </svg>
+      <ZoomControls />
+    </div>
+  );
+}
+
 export function Mockup() {
   const project = useStore((s) => s.project);
   const uiLang = useStore((s) => s.uiLang);
@@ -130,14 +147,12 @@ export function Mockup() {
 
   if (product.shape === 'none') {
     return (
-      <div className="canvas-wrap">
-        <svg className="canvas" viewBox={`${-20} ${-20} ${c.w + 40} ${c.h + 40}`}>
+      <ZoomableSvg className="canvas" base={{ x: -20, y: -20, w: c.w + 40, h: c.h + 40 }}>
           <rect width={c.w} height={c.h} fill={color.hex} />
           <svg width={c.w} height={c.h} viewBox={`0 0 ${c.w} ${c.h}`} overflow="hidden">
             {design}
           </svg>
-        </svg>
-      </div>
+      </ZoomableSvg>
     );
   }
 
@@ -148,8 +163,7 @@ export function Mockup() {
     const W = c.w + 2 * (f + wall);
     const H = c.h + 2 * (f + wall);
     return (
-      <div className="canvas-wrap">
-        <svg className="canvas mockup" viewBox={`0 0 ${W} ${H}`}>
+      <ZoomableSvg className="canvas mockup" base={{ x: 0, y: 0, w: W, h: H }}>
           <defs>
             <filter id="frameShadow" x="-10%" y="-10%" width="120%" height="125%">
               <feDropShadow dx="0" dy={f * 0.5} stdDeviation={f * 0.6} floodOpacity="0.28" />
@@ -165,16 +179,14 @@ export function Mockup() {
           <svg x={wall + f} y={wall + f} width={c.w} height={c.h} viewBox={`0 0 ${c.w} ${c.h}`} overflow="hidden">
             {design}
           </svg>
-        </svg>
-      </div>
+      </ZoomableSvg>
     );
   }
 
   const o = product.shape === 'tote' || product.shape === 'mini-tote' ? bagOutline(product.shape, size) : topOutline(product.shape, size);
   const stroke = color.dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)';
   return (
-    <div className="canvas-wrap">
-      <svg className="canvas mockup" viewBox={`0 0 ${o.w} ${o.h}`}>
+    <ZoomableSvg className="canvas mockup" base={{ x: 0, y: 0, w: o.w, h: o.h }}>
         <defs>
           <linearGradient id="fabric" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#fff" stopOpacity="0.10" />
@@ -193,7 +205,6 @@ export function Mockup() {
         </g>
         <path d={o.body} fill="url(#fabric)" pointerEvents="none" />
         <rect x={o.px} y={o.py} width={c.w} height={c.h} fill="none" stroke={color.dark ? '#fff' : '#36c'} strokeOpacity={0.35} strokeDasharray="4 3" strokeWidth={0.8} />
-      </svg>
-    </div>
+    </ZoomableSvg>
   );
 }
