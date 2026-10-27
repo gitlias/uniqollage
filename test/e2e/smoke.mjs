@@ -167,19 +167,27 @@ const setRegion = async (r) => {
   await page.selectOption('.settings-panel select >> nth=0', r);
   await closeSettings();
 };
+// Product and size live in the settings panel (region, product, size).
+const choose = async (which, value) => {
+  await openSettings();
+  await page.selectOption(`.settings-panel select >> nth=${which === 'product' ? 1 : 2}`, value);
+  await closeSettings();
+};
 
 await step('mockups', async () => {
-  const product = '.toolbar select >> nth=0';
-  const size = '.toolbar select >> nth=1';
   await page.click('.page-tabs button >> text=Preview on product');
   await page.screenshot({ path: `${out}/mockup-tshirt.png` });
-  const deProducts = await page.locator('.toolbar select').nth(0).locator('option').allTextContents();
+  await openSettings();
+  const deProducts = await page.locator('.settings-panel select').nth(1).locator('option').allTextContents();
+  await closeSettings();
   if (deProducts.length !== 6 || deProducts.some((x) => /Sweat|AIRism|U Crew/.test(x))) throw new Error(`DE products: ${deProducts}`);
-  await page.selectOption(size, '3XL');
-  await page.waitForSelector('.toolbar .estimated');
+  await openSettings();
+  await page.selectOption('.settings-panel select >> nth=2', '3XL');
+  await page.waitForSelector('.settings-panel .estimated');
+  await closeSettings();
   await setRegion('jp');
-  await page.selectOption(product, 'sweat');
-  await page.selectOption(size, 'L');
+  await choose('product', 'sweat');
+  await choose('size', 'L');
   await openSettings();
   await page.click('.settings-panel .swatch[title=Black]');
   const night = page.locator('.settings-panel label', { hasText: /Night mode|Dunkelmodus/ }).locator('input');
@@ -187,18 +195,18 @@ await step('mockups', async () => {
   await closeSettings();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-sweat-black.png` });
-  await page.selectOption(product, 'airism-oversized');
+  await choose('product', 'airism-oversized');
   await page.screenshot({ path: `${out}/mockup-oversized.png` });
   await setRegion('de');
-  await page.selectOption(product, 'tote');
+  await choose('product', 'tote');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-tote.png` });
-  await page.selectOption(product, 'mini-tote');
+  await choose('product', 'mini-tote');
   await page.screenshot({ path: `${out}/mockup-mini.png` });
-  await page.selectOption(product, 'kids-t');
+  await choose('product', 'kids-t');
   await page.screenshot({ path: `${out}/mockup-kids.png` });
-  await page.selectOption(product, 'poster');
-  await page.selectOption(size, 'A2');
+  await choose('product', 'poster');
+  await choose('size', 'A2');
   await openSettings();
   await page.click('.settings-panel .seg button >> text=Landscape');
   await closeSettings();
@@ -211,8 +219,8 @@ await step('mockups', async () => {
   await openSettings();
   await page.click('.settings-panel .seg button >> text=Portrait');
   await closeSettings();
-  await page.selectOption(product, 'basic-t');
-  await page.selectOption(size, 'M');
+  await choose('product', 'basic-t');
+  await choose('size', 'M');
   await page.click('.page-tabs button >> text=Edit');
 });
 
