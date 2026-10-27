@@ -7,10 +7,12 @@ import { PALETTES } from '../render/tiles';
 import { useT } from '../i18n';
 import { useUi } from '../ui';
 import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
+import { HANDLES, resizeTile, type Handle } from '../layout/resize';
+import type { Tile } from '../model';
 
 type Gesture =
   | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number }
-  | { kind: 'resize'; id: string; sx: number; sy: number; w0: number; rot: number }
+  | { kind: 'resize'; id: string; sx: number; sy: number; t0: Tile; h0: number; handle: Handle }
   | { kind: 'rotate'; id: string; cx: number; cy: number };
 
 /** Interactive collage editor (SVG in print-area millimetres). */
@@ -54,9 +56,8 @@ export function Canvas() {
     if (g.kind === 'move') {
       patchTile(g.id, { x: g.x0 + p.x - g.sx, y: g.y0 + p.y - g.sy }, false);
     } else if (g.kind === 'resize') {
-      const a = (g.rot * Math.PI) / 180;
-      const dx = (p.x - g.sx) * Math.cos(a) + (p.y - g.sy) * Math.sin(a);
-      patchTile(g.id, { w: Math.max(8, g.w0 + dx) }, false);
+      const { baseSize, skin } = useStore.getState().project;
+      patchTile(g.id, resizeTile(g.t0, g.h0, g.handle, p.x - g.sx, p.y - g.sy, { baseSize, skin: skin ?? 'vector2010' }), false);
     } else {
       let deg = (Math.atan2(p.y - g.cy, p.x - g.cx) * 180) / Math.PI + 90;
       if (deg > 180) deg -= 360;
@@ -188,18 +189,25 @@ export function Canvas() {
                 })
               }
             />
-            <rect
-              className="handle resize"
-              x={sel.tile.w - hs / 2}
-              y={sel.h / 2 - hs}
-              width={hs}
-              height={hs * 2}
-              rx={hs / 3}
-              onPointerDown={(e) => {
-                const pt = toLocal(e);
-                start(e, { kind: 'resize', id: sel.tile.id, sx: pt.x, sy: pt.y, w0: sel.tile.w, rot: sel.tile.rot });
-              }}
-            />
+            {HANDLES.map((handle) => {
+              const hx = handle.includes('w') ? 0 : handle.includes('e') ? sel.tile.w : sel.tile.w / 2;
+              const hy = handle.includes('n') ? 0 : handle.includes('s') ? sel.h : sel.h / 2;
+              return (
+                <rect
+                  key={handle}
+                  className={`handle resize ${handle}`}
+                  data-handle={handle}
+                  x={hx - hs / 2}
+                  y={hy - hs / 2}
+                  width={hs}
+                  height={hs}
+                  onPointerDown={(e) => {
+                    const pt = toLocal(e);
+                    start(e, { kind: 'resize', id: sel.tile.id, sx: pt.x, sy: pt.y, t0: sel.tile, h0: sel.h, handle });
+                  }}
+                />
+              );
+            })}
           </g>
         )}
       </svg>

@@ -127,6 +127,29 @@ await step('select, drag, rotate a tile', async () => {
   await page.keyboard.press('Escape');
 });
 
+await step('resize from edges and corners', async () => {
+  await page.locator('.canvas .tile .hit').nth(1).click();
+  const sel = () => page.locator('.canvas rect[stroke="#36c"]').first().boundingBox();
+  const drag = async (handle, dx, dy) => {
+    const b = await page.locator(`.canvas .handle.resize.${handle}`).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 4 });
+    await page.mouse.up();
+  };
+  const b0 = await sel();
+  await drag('s', 0, 40);
+  const b1 = await sel();
+  if (!(b1.height > b0.height + 20)) throw new Error(`bottom handle: ${b0.height} → ${b1.height}`);
+  await drag('w', -30, 0);
+  const b2 = await sel();
+  if (!(b2.width > b1.width + 15) || Math.abs(b2.x + b2.width - (b1.x + b1.width)) > 3) throw new Error('left handle should grow to the left');
+  await drag('se', 30, 30);
+  const b3 = await sel();
+  if (!(b3.width > b2.width && b3.height > b2.height)) throw new Error('corner handle should scale');
+  await page.screenshot({ path: `${out}/resized.png` });
+});
+
 await step('undo/redo', async () => {
   await page.keyboard.press('Control+z');
   await page.keyboard.press('Control+Shift+z');

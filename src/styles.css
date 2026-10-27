@@ -413,8 +413,21 @@ main.content {
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
-.canvas .handle.resize {
+.canvas .handle.resize.e,
+.canvas .handle.resize.w {
   cursor: ew-resize;
+}
+.canvas .handle.resize.n,
+.canvas .handle.resize.s {
+  cursor: ns-resize;
+}
+.canvas .handle.resize.ne,
+.canvas .handle.resize.sw {
+  cursor: nesw-resize;
+}
+.canvas .handle.resize.nw,
+.canvas .handle.resize.se {
+  cursor: nwse-resize;
 }
 .canvas .handle.rotate {
   cursor: grab;
