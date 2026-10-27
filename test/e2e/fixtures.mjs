@@ -95,17 +95,26 @@ export function handle(url) {
       query: {
         pages: [
           { title: 'Brillenkauz', extract: 'Der Brillenkauz ist eine Eulenart aus Mittel- und Südamerika. Er ist nachtaktiv.', description: 'Art der Gattung Pulsatrix' },
-          { title: 'Hallig', extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.', thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}` } },
+          {
+            title: 'Hallig',
+            extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.',
+            description: 'kleine Marschinsel',
+            pageimage: 'Ginkgo_tree.jpg',
+            thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}`, width: 500, height: 333 },
+          },
         ],
       },
     });
+  }
+  if (p.action === 'query' && p.prop === 'description') {
+    return json({ query: { pages: [{ title: p.titles, description: 'Genus of plants' }] } });
   }
   if (p.action === 'query' && p.prop === 'imageinfo') {
     const pages = p.titles.split('|').map((t) => {
       const name = t.replace(/^File:/, '').replace(/ /g, '_');
       const [w, h] = name.startsWith('Ginkgo_leaf') ? [800, 1000] : name.startsWith('Hiroshima') ? [1000, 1000] : [1200, 800];
       return {
-        title: lang === 'de' ? `Datei:${t.slice(5)}` : t,
+        title: (lang === 'de' ? `Datei:${t.slice(5)}` : t).replace(/_/g, ' '),
         imageinfo: [
           {
             thumburl: `https:${img(name, 1920)}`,

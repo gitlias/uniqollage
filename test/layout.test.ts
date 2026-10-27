@@ -91,3 +91,12 @@ describe('night mode', () => {
     expect(new Set(fills)).toEqual(new Set(['#eaecf0', '#88a3e8']));
   });
 });
+
+describe('extended scripts', () => {
+  it('has glyphs for Chechen palochka, polytonic Greek and Vietnamese', async () => {
+    const { font } = await import('../src/text/fonts');
+    // The .notdef box is a closed rectangle; real glyphs differ in width from it.
+    const notdef = font('sans').measure('￿', 10);
+    for (const ch of ['Ӏ', 'ӏ', 'ἀ', 'ệ']) expect(font('sans').measure(ch, 10)).not.toBe(notdef);
+  });
+});

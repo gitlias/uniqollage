@@ -52,3 +52,32 @@ describe('skins and image styles', () => {
     expect(fills).toContain('#0645ad');
   });
 });
+
+describe('cards', () => {
+  it('renders image, title, rule, description and text, and credits the image', async () => {
+    const { creditText } = await import('../src/render/collage');
+    const card = {
+      id: 'c',
+      type: 'card' as const,
+      x: 0,
+      y: 0,
+      w: 80,
+      rot: 0,
+      scale: 1,
+      source: { kind: 'wikipedia' as const, lang: 'de' as const, title: 'Naurskaja' },
+      title: 'Naurskaja',
+      description: 'Siedlung in Russland',
+      markup: "'''Naurskaja''' ist eine Staniza in der Republik Tschetschenien.",
+      image: { src: 'x.jpg', aspect: 2.2 },
+      imageSource: { kind: 'wikipedia' as const, license: 'CC BY-SA 3.0' },
+    };
+    const r = renderTile(card, 3, 'light', 'vector2010');
+    expect(r.prims.filter((p) => p.t === 'image')).toHaveLength(1);
+    expect(r.prims.filter((p) => p.t === 'line')).toHaveLength(1);
+    const noImage = renderTile({ ...card, image: undefined }, 3, 'light', 'vector2010');
+    expect(r.h - noImage.h).toBeGreaterThan(20);
+    const credit = creditText({ ...emptyProject(), tiles: [card] }, 'de');
+    expect(credit).toContain('de.wikipedia.org');
+    expect(credit).toContain('CC BY-SA 3.0');
+  });
+});

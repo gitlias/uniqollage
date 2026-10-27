@@ -129,6 +129,8 @@ export interface Article extends ParsedArticle {
   lang: Lang;
   title: string;
   url: string;
+  /** Wikidata short description, e.g. "Siedlung in Russland". */
+  description?: string;
   images: Map<string, ImageInfo>;
 }
 
@@ -143,6 +145,13 @@ export async function loadArticle(lang: Lang, title: string): Promise<Article> {
   });
   const realTitle: string = json.parse.title;
   const parsed = parseArticle(json.parse.text, lang);
+  let description: string | undefined;
+  try {
+    const d = await api(lang, { action: 'query', titles: realTitle, prop: 'description' });
+    description = d.query?.pages?.[0]?.description;
+  } catch {
+    // Optional.
+  }
   const files = [...parsed.figures, ...(parsed.infobox?.image ? [parsed.infobox.image] : [])].map((f: Figure) => f.file);
   let images = new Map<string, ImageInfo>();
   if (files.length) {
@@ -152,7 +161,7 @@ export async function loadArticle(lang: Lang, title: string): Promise<Article> {
       // Fall back to the inline thumbnails below.
     }
   }
-  return { ...parsed, lang, title: realTitle, url: articleUrl(lang, realTitle), images };
+  return { ...parsed, lang, title: realTitle, url: articleUrl(lang, realTitle), images, description };
 }
 
 export interface RandomArticle {
@@ -160,6 +169,10 @@ export interface RandomArticle {
   extract: string;
   description?: string;
   thumb?: string;
+  /** Thumbnail aspect ratio (w/h). */
+  aspect?: number;
+  /** File name of the article's lead image. */
+  pageImage?: string;
 }
 
 export async function randomArticles(lang: Lang, n = 5): Promise<RandomArticle[]> {
@@ -173,7 +186,7 @@ export async function randomArticles(lang: Lang, n = 5): Promise<RandomArticle[]
     explaintext: 1,
     exsentences: 3,
     exlimit: n,
-    piprop: 'thumbnail',
+    piprop: 'thumbnail|name',
     pithumbsize: 500,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,6 +195,8 @@ export async function randomArticles(lang: Lang, n = 5): Promise<RandomArticle[]
     extract: cleanText(p.extract ?? '').trim(),
     description: p.description,
     thumb: p.thumbnail?.source,
+    aspect: p.thumbnail?.width && p.thumbnail?.height ? p.thumbnail.width / p.thumbnail.height : undefined,
+    pageImage: p.pageimage,
   }));
 }
 

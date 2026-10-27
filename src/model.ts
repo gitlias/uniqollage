@@ -71,7 +71,18 @@ export interface InfoboxTile extends TileBase {
   rows: [string, string][];
 }
 
-export type Tile = TitleTile | TextTile | ImageTile | InfoboxTile;
+/** Article summary like Wikipedia's page previews: image, title, description, extract. */
+export interface CardTile extends TileBase {
+  type: 'card';
+  title: string;
+  description?: string;
+  markup: string;
+  image?: ImageRef;
+  /** Licence data of the image, for attribution. */
+  imageSource?: Source;
+}
+
+export type Tile = TitleTile | TextTile | ImageTile | InfoboxTile | CardTile;
 export type TileType = Tile['type'];
 
 /** A tile before it has been placed on the collage. */

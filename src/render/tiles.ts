@@ -1,4 +1,4 @@
-import type { ImageStyle, ImageTile, InfoboxTile, Skin, Theme, Tile, TextTile, TitleTile } from '../model';
+import type { CardTile, ImageStyle, ImageTile, InfoboxTile, Skin, Theme, Tile, TextTile, TitleTile } from '../model';
 import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
 
@@ -198,6 +198,41 @@ function renderImage(t: ImageTile, b: number): Rendered {
   return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.frameBorder, sw }, ...body] };
 }
 
+/** Cards never show images taller than 4:3 (like Wikipedia's page previews). */
+export const CARD_MIN_ASPECT = 4 / 3;
+
+function renderCard(t: CardTile, b: number): Rendered {
+  const sw = Math.max(b * 0.07, 0.1);
+  const pad = b * 0.7;
+  const inner = t.w - 2 * pad;
+  const body: Prim[] = [];
+  let y = pad;
+  if (t.image) {
+    const ih = inner / Math.max(t.image.aspect, CARD_MIN_ASPECT);
+    body.push({ t: 'image', x: pad, y, w: inner, h: ih, href: t.image.src });
+    y += ih + b * 0.6;
+  }
+  const sans = skin === 'monobook';
+  const size = b * (sans ? 1.5 : 1.7);
+  const title = text(t.title, pad, y, inner, { size, lineHeight: 1.25, family: sans ? 'sans' : 'serif', color: pal.title });
+  body.push(...title.prims);
+  y += title.block.height + size * 0.1;
+  body.push({ t: 'line', x1: pad, y1: y, x2: pad + inner, y2: y, stroke: pal.rule, sw });
+  y += b * 0.45;
+  if (t.description?.trim()) {
+    const d = text(t.description, pad, y, inner, { size: b * 0.88, lineHeight: 1.4, color: pal.muted });
+    body.push(...d.prims);
+    y += d.block.height + b * 0.35;
+  }
+  if (t.markup.trim()) {
+    const x = text(t.markup, pad, y, inner, { size: b, lineHeight: 1.55 });
+    body.push(...x.prims);
+    y += x.block.height;
+  }
+  y += pad;
+  return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.page, stroke: pal.frameBorder, sw }, ...body] };
+}
+
 function renderInfobox(t: InfoboxTile, b: number): Rendered {
   const size = b * 0.88;
   const sw = Math.max(b * 0.07, 0.1);
@@ -262,6 +297,9 @@ export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light', sk
       break;
     case 'infobox':
       r = renderInfobox(t, b);
+      break;
+    case 'card':
+      r = renderCard(t, b);
       break;
   }
   cache.set(t, { b, theme, skin: sk, r });

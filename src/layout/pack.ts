@@ -71,6 +71,12 @@ function spanFor(t: Tile, cols: number, colW: number, gap: number, b: number, r:
     case 'infobox':
       s = r > 0.6 ? 2 : 1;
       break;
+    case 'card': {
+      const len = stripMarkup(t.markup).length * t.scale;
+      s = len < 220 ? 1 : 2;
+      if (r > 0.7) s++;
+      break;
+    }
   }
   return Math.max(1, Math.min(s, cols, Math.max(2, Math.ceil(cols * 0.67))));
 }

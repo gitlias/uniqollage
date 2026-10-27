@@ -42,6 +42,10 @@ export function creditText(p: Project, lang: 'en' | 'de'): string {
         if (s.license) licences.add(s.license);
       }
     }
+    if (t.type === 'card' && t.image) {
+      commons = true;
+      if (t.imageSource?.license) licences.add(t.imageSource.license);
+    }
   }
   const parts: string[] = [];
   const sites = [...textLangs].map((l) => `${l}.wikipedia.org`).join(', ');

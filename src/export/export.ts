@@ -1,4 +1,4 @@
-import type { Project } from '../model';
+import type { Project, Source, Tile } from '../model';
 import { compose, compositionToSvg, pageBackground, type Composition } from '../render/collage';
 import { areaOf, exportPixels, productById, type UploadTargetId } from '../products';
 
@@ -150,7 +150,12 @@ export function attributionText(p: Project, lang: 'en' | 'de'): string {
   lines.push(lang === 'de' ? 'Quellen und Lizenzen' : 'Sources and licences');
   lines.push('');
   const seen = new Set<string>();
-  for (const t of p.tiles) {
+  // Card images carry their own source next to the article's.
+  type Entry = { id: string; type: Tile['type']; source: Source };
+  const sources = p.tiles.flatMap((t): Entry[] =>
+    t.type === 'card' && t.imageSource ? [t, { id: t.id, type: 'image', source: t.imageSource }] : [t],
+  );
+  for (const t of sources) {
     const s = t.source;
     const key = `${s.kind}|${s.url ?? s.title ?? t.id}`;
     if (seen.has(key)) continue;

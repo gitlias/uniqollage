@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { useT } from '../i18n';
 import { stripMarkup } from '../text/markup';
 
-const ICON: Record<Tile['type'], string> = { title: 'H', text: '¶', image: '▣', infobox: '▤' };
+const ICON: Record<Tile['type'], string> = { title: 'H', text: '¶', image: '▣', infobox: '▤', card: '▭' };
 
 function label(t: Tile): string {
   switch (t.type) {
@@ -15,6 +15,8 @@ function label(t: Tile): string {
       return stripMarkup(t.caption) || t.source.title || 'Image';
     case 'infobox':
       return t.heading;
+    case 'card':
+      return t.title;
   }
 }
 
@@ -77,6 +79,25 @@ export function Inspector() {
                   ))}
                 </select>
               </label>
+            </>
+          )}
+          {tile.type === 'card' && (
+            <>
+              <label>
+                {t('heading')}
+                <input value={tile.title} {...textProps} onChange={(e) => set({ title: e.target.value })} />
+              </label>
+              <label>
+                {t('description')}
+                <input value={tile.description ?? ''} {...textProps} onChange={(e) => set({ description: e.target.value })} />
+              </label>
+              <label>
+                {t('text')}
+                <textarea rows={6} value={tile.markup} {...textProps} onChange={(e) => set({ markup: e.target.value })} />
+              </label>
+              {tile.image && (
+                <button onClick={() => s.patchTile(tile.id, { image: undefined, imageSource: undefined })}>{t('removeImage')}</button>
+              )}
             </>
           )}
           {tile.type === 'infobox' && (

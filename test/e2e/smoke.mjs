@@ -59,7 +59,11 @@ await step('add DYK facts (EN + DE)', async () => {
 await step('add random article and commons image', async () => {
   await page.click('.tabs button >> text=Random');
   await page.waitForSelector('.tab:visible .card.random');
-  await page.locator('.tab:visible .card.random button.add').first().click();
+  // "Add" on the article with a picture adds a page-preview card.
+  const hallig = page.locator('.tab:visible .card.random').filter({ hasText: 'Hallig' });
+  await hallig.locator('button.add').first().click();
+  await page.waitForSelector('.tile-list li >> text=Hallig');
+  await page.locator('.tab:visible .card.random').first().locator('button.add >> text=Text only').click();
   await page.click('.tabs button >> text=Commons');
   await page.fill('.tab:visible input[type=search]', 'cat');
   await page.keyboard.press('Enter');
@@ -91,6 +95,11 @@ await step('shuffle and screenshot editor', async () => {
   await page.click('button >> text=Shuffle');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/editor.png` });
+});
+
+await step('card has the 1920 px lead image', async () => {
+  const hrefs = await page.locator('.canvas image').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+  if (!hrefs.some((h) => h && h.includes('1920px-Ginkgo_tree.jpg'))) throw new Error(`no print-size card image: ${hrefs}`);
 });
 
 await step('zoom on a classic image tile', async () => {

@@ -6,7 +6,7 @@ import type { Font } from 'opentype.js';
 
 export type FontStyle = 'serif' | 'serifItalic' | 'sans' | 'sansBold' | 'sansItalic' | 'sansBoldItalic';
 
-const SUBSETS = ['latin', 'latin-ext', 'greek', 'cyrillic'] as const;
+const SUBSETS = ['latin', 'latin-ext', 'greek', 'greek-ext', 'cyrillic', 'cyrillic-ext', 'vietnamese'] as const;
 
 /** fontsource file name stem per style, e.g. "arimo-{subset}-700-normal". */
 const FILES: Record<FontStyle, string> = {
@@ -133,8 +133,8 @@ export async function loadFonts(): Promise<void> {
   if (chains) return;
   const urls = import.meta.glob(
     [
-      '/node_modules/@fontsource/arimo/files/arimo-{latin,latin-ext,greek,cyrillic}-{400,700}-{normal,italic}.woff',
-      '/node_modules/@fontsource/libertinus-serif/files/libertinus-serif-{latin,latin-ext,greek,cyrillic}-400-{normal,italic}.woff',
+      '/node_modules/@fontsource/arimo/files/arimo-{latin,latin-ext,greek,greek-ext,cyrillic,cyrillic-ext,vietnamese}-{400,700}-{normal,italic}.woff',
+      '/node_modules/@fontsource/libertinus-serif/files/libertinus-serif-{latin,latin-ext,greek,greek-ext,cyrillic,cyrillic-ext,vietnamese}-400-{normal,italic}.woff',
     ],
     {
     query: '?url',

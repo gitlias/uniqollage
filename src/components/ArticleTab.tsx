@@ -6,6 +6,7 @@ import { useT } from '../i18n';
 import { loadArticle, searchArticles, type Article, type SearchHit } from '../wiki/api';
 import type { Figure } from '../wiki/parse';
 import { AddButton, LangToggle, Markup, Status, measureAspect } from './common';
+import { cardDraft } from './cards';
 
 export function ArticleTab() {
   const t = useT();
@@ -120,9 +121,28 @@ function ArticleView({ article: a, onBack, loading }: { article: Article; onBack
       {loading && <p className="muted">{t('loading')}</p>}
       <div className="card">
         <div className="wiki-title">{a.title}</div>
+        {a.description && <div className="muted small">{a.description}</div>}
         <div className="row">
           <AddButton label={t('addTitle')} onAdd={() => addTiles([{ type: 'title', text: a.title, tagline: false, source }])} />
           <AddButton label={`${t('addTitle')} + tagline`} onAdd={() => addTiles([{ type: 'title', text: a.title, tagline: true, source }])} />
+          <span title={t('addCardHint')}>
+            <AddButton
+              label={t('addCard')}
+              onAdd={async () => {
+                const lead = a.sentences.filter((s) => !s.section).slice(0, 3);
+                const fig = a.infobox?.image ?? a.figures[0];
+                addTiles([
+                  await cardDraft({
+                    lang: a.lang,
+                    title: a.title,
+                    description: a.description,
+                    markup: lead.length ? lead.map((s) => s.markup).join(' ') : a.lead,
+                    image: fig ? { file: fig.file, thumb: fig.thumb } : undefined,
+                  }),
+                ]);
+              }}
+            />
+          </span>
         </div>
       </div>
 

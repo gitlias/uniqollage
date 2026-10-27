@@ -6,6 +6,14 @@ import { useT } from '../i18n';
 import { articleUrl, randomArticles, type RandomArticle } from '../wiki/api';
 import { escapeText } from '../text/markup';
 import { AddButton, LangToggle, Status } from './common';
+import { cardDraft } from './cards';
+
+/** Extract with the first occurrence of the title in bold, as in a Wikipedia lead. */
+function leadMarkup(a: RandomArticle): string {
+  const text = escapeText(a.extract);
+  const i = text.indexOf(a.title);
+  return i >= 0 ? `${text.slice(0, i)}'''${a.title}'''${text.slice(i + a.title.length)}` : text;
+}
 
 export function RandomTab() {
   const t = useT();
@@ -50,14 +58,21 @@ export function RandomTab() {
           <div className="row">
             <button onClick={() => openArticle(lang, a.title)}>{t('open')} →</button>
             <AddButton
-              onAdd={() => {
-                const src = { kind: 'wikipedia' as const, lang, title: a.title, url: articleUrl(lang, a.title) };
-                // Bold the first occurrence of the title, as in a Wikipedia lead.
-                const text = escapeText(a.extract);
-                const i = text.indexOf(a.title);
-                const markup = i >= 0 ? `${text.slice(0, i)}'''${a.title}'''${text.slice(i + a.title.length)}` : text;
-                addTiles([{ type: 'text', markup, source: src }]);
-              }}
+              onAdd={async () =>
+                addTiles([
+                  await cardDraft({
+                    lang,
+                    title: a.title,
+                    description: a.description,
+                    markup: leadMarkup(a),
+                    image: a.thumb ? { file: a.pageImage, thumb: a.thumb, aspect: a.aspect } : undefined,
+                  }),
+                ])
+              }
+            />
+            <AddButton
+              label={t('textOnly')}
+              onAdd={() => addTiles([{ type: 'text', markup: leadMarkup(a), source: { kind: 'wikipedia', lang, title: a.title, url: articleUrl(lang, a.title) } }])}
             />
           </div>
         </div>
