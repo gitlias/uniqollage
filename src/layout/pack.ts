@@ -268,7 +268,32 @@ export interface ArrangeResult {
   overflow: boolean;
 }
 
-const VARIANTS = 6;
+const VARIANTS = 10;
+
+/**
+ * Share of column ends that would keep a hole along the top or bottom edge
+ * after flushEdges: a column end is fine if its outermost tile has nothing
+ * beyond it in any of the tile's columns (then it can move to the edge).
+ */
+function raggedness(a: Attempt): number {
+  if (!a.slots.length) return 0;
+  const shares = (s: Slot, o: Slot) => o !== s && o.col < s.col + s.span && s.col < o.col + o.span;
+  const freeBelow = (s: Slot) => !a.slots.some((o) => shares(s, o) && o.tile.y > s.tile.y);
+  const freeAbove = (s: Slot) => !a.slots.some((o) => shares(s, o) && o.tile.y < s.tile.y);
+  let bad = 0;
+  for (let c = 0; c < a.cols; c++) {
+    const inCol = a.slots.filter((s) => s.col <= c && c < s.col + s.span);
+    if (!inCol.length) {
+      bad += 2;
+      continue;
+    }
+    const lowest = inCol.reduce((p, q) => (q.tile.y > p.tile.y ? q : p));
+    const highest = inCol.reduce((p, q) => (q.tile.y < p.tile.y ? q : p));
+    if (!freeBelow(lowest)) bad++;
+    if (!freeAbove(highest)) bad++;
+  }
+  return bad / (2 * a.cols);
+}
 
 /**
  * Lay out `tiles` (in the given order) inside `area`.
@@ -299,23 +324,41 @@ export function arrange(
   if (!clean.length) return { tiles: clean, baseSize: opts.baseSize, overflow: false };
   let b = opts.baseSize;
   let res: Attempt | null = null;
+  // Several span/order variants; prefer large text, but strongly avoid holes
+  // along the bottom edge (a clean outline beats a slightly larger size).
+  const score = (size: number, a: Attempt) => size * (1 - 2 * raggedness(a));
   if (opts.autoSize) {
-    let best: { b: number; res: Attempt } | null = null;
+    let best: { b: number; res: Attempt; score: number } | null = null;
     for (let v = 0; v < VARIANTS; v++) {
       const f = fit(clean, area, opts.seed + v * 7919, skin, opts.gap);
-      if (f && (!best || f.b > best.b)) best = f;
+      if (!f) continue;
+      const sc = score(f.b, f.res);
+      if (!best || sc > best.score) best = { ...f, score: sc };
     }
     if (best) {
       b = best.b;
       res = best.res;
     } else b = 0.6;
+  } else {
+    let best: { res: Attempt; r: number } | null = null;
+    for (let v = 0; v < VARIANTS; v++) {
+      const a = attempt(clean, area, b, opts.seed + v * 7919, skin, opts.gap);
+      if (a.height > area.h + 1e-6) continue;
+      const r = raggedness(a);
+      if (!best || r < best.r) best = { res: a, r };
+      if (r === 0) break;
+    }
+    res = best?.res ?? null;
   }
   res ??= attempt(clean, area, b, opts.seed, skin, opts.gap);
   const overflow = res.height > area.h + 1e-6;
+  // Heights at the (rounded) size that is returned and rendered.
+  const bOut = Math.round(b * 1000) / 1000;
+  const height = (t: Tile) => tileHeight(t, t.w, bOut, skin);
   if (neat > 0 && !overflow) {
     const fillers = neaten(res, area, b, skin, neat, opts.reserve ?? [], opts.seed);
     const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y }));
-    return { tiles: [...out, ...fillers], baseSize: Math.round(b * 1000) / 1000, overflow };
+    return { tiles: flushBottom([...out, ...fillers], area, height), baseSize: bOut, overflow };
   }
   fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
@@ -323,5 +366,26 @@ export function arrange(
   // With a fixed spacing the gaps must stay exactly as set, so don't spread.
   const k = opts.gap === undefined && res.height > 0 && res.height < area.h ? area.h / res.height : 1;
   const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y * k }));
-  return { tiles: out, baseSize: Math.round(b * 1000) / 1000, overflow };
+  return { tiles: overflow ? out : flushBottom(out, area, height), baseSize: bOut, overflow };
+}
+
+/**
+ * Clean outer edges: every tile with nothing above it moves up to the top of
+ * the area and every tile with nothing below it moves down to the bottom, so
+ * all columns start and end flush. The slack becomes gaps inside the collage
+ * instead of ragged edges. (Left and right are flush thanks to the grid.)
+ */
+function flushBottom(tiles: Tile[], area: Box, height: (t: Tile) => number): Tile[] {
+  const hs = tiles.map(height);
+  const end = area.y + area.h;
+  const sharesColumns = (a: Tile, o: Tile) => o.x < a.x + a.w - 1e-6 && a.x < o.x + o.w - 1e-6;
+  const up = tiles.map((t, i) => {
+    const above = tiles.some((o, j) => j !== i && o.y < t.y - 1e-6 && sharesColumns(t, o));
+    return above || t.y <= area.y ? t : { ...t, y: area.y };
+  });
+  return up.map((t, i) => {
+    const below = up.some((o, j) => j !== i && o.y > t.y + 1e-6 && sharesColumns(t, o));
+    const y = end - hs[i];
+    return below || y <= t.y ? t : { ...t, y };
+  });
 }

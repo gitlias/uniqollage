@@ -136,8 +136,8 @@ describe('neat layout', () => {
   it('ends every column flush at the bottom (fillers + growth), without overlaps', () => {
     const loose = arrange(sample(14), area, { baseSize: 3, autoSize: false, seed: 9, gap: 4 });
     const neat = arrange(sample(14), area, { baseSize: 3, autoSize: false, seed: 9, gap: 4, neat: 1, reserve });
-    const spread = (bs: number[]) => Math.max(...bs) - Math.min(...bs);
-    expect(spread(columnBottoms(loose.tiles, 3))).toBeGreaterThan(10);
+    // Both end flush; neat additionally fills inner gaps with small text.
+    expect(loose.tiles.some((t) => t.type === 'text' && t.filler)).toBe(false);
     const bottoms = columnBottoms(neat.tiles, 3);
     for (const bt of bottoms) expect(bt).toBeGreaterThan(area.h - 3 * 1.4 - 4 - 1);
     expect(neat.tiles.some((t) => t.type === 'text' && t.filler)).toBe(true);
@@ -153,4 +153,24 @@ describe('neat layout', () => {
     const growth = (ts: Tile[]) => ts.reduce((s, t) => s + (t.grow ?? 1), 0);
     expect(growth(again.tiles)).toBeCloseTo(growth(first.tiles), 6);
   });
+});
+
+describe('clean outer edge', () => {
+  const area = { x: 10, y: 5, w: 250, h: 320 };
+  for (const [name, extra] of [
+    ['automatic spacing', {}],
+    ['fixed spacing', { gap: 5 }],
+    ['fixed text size', { autoSize: false }],
+  ] as const) {
+    it(`every column starts at the top and ends at the bottom edge (${name})`, () => {
+      const res = arrange(sample(13), area, { baseSize: 3, autoSize: true, seed: 21, ...extra });
+      const boxes = res.tiles.map((t) => ({ x: t.x, y: t.y, w: t.w, h: renderTile(t, res.baseSize).h }));
+      for (const x of boxes.map((b) => b.x)) {
+        const inCol = boxes.filter((b) => b.x <= x + 0.01 && x < b.x + b.w - 0.01);
+        expect(Math.max(...inCol.map((b) => b.y + b.h))).toBeCloseTo(area.y + area.h, 3);
+        expect(Math.min(...inCol.map((b) => b.y))).toBeCloseTo(area.y, 3);
+      }
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j])).toBe(false);
+    });
+  }
 });
