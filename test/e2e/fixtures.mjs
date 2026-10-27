@@ -20,10 +20,10 @@ export const articleHtml = `<div class="mw-parser-output">
 <tr><th>Genus:</th><td><i><b>Ginkgo</b></i> <a href="/wiki/Carl_Linnaeus">L.</a></td></tr>
 </tbody></table>
 <p><b>Ginkgo</b> is a <a href="/wiki/Genus">genus</a> of non-flowering <a href="/wiki/Seed_plant">seed plants</a>.<sup class="reference">[1]</sup> The scientific name is also used as the English name. It is the only living genus of its order, first appearing about 290 million years ago in the <a href="/wiki/Permian">Permian</a>.</p>
-<figure typeof="mw:File/Thumb"><a href="/wiki/File:Ginkgo_tree.jpg" class="mw-file-description"><img src="${img('Ginkgo_tree.jpg', 220)}" width="220" height="147"></a><figcaption>A 1,000-year-old <a href="/wiki/Tree">tree</a> in <a href="/wiki/Korea">Korea</a></figcaption></figure>
+<figure typeof="mw:File/Thumb"><a href="/wiki/File:Ginkgo_tree.jpg" class="mw-file-description"><img src="${img('Ginkgo_tree.jpg', 250)}" width="220" height="147"></a><figcaption>A 1,000-year-old <a href="/wiki/Tree">tree</a> in <a href="/wiki/Korea">Korea</a></figcaption></figure>
 <div class="mw-heading mw-heading2"><h2 id="History">History</h2></div>
 <p>Six <i>Ginkgo</i> trees survived the <a href="/wiki/Atomic_bombing_of_Hiroshima">atomic bombing of Hiroshima</a> in 1945, only 1–2 km from the explosion, and they are still alive today. Ginkgos are popular street trees because they tolerate pollution remarkably well.</p>
-<figure typeof="mw:File/Thumb"><a href="/wiki/File:Hiroshima.jpg" class="mw-file-description"><img src="${img('Hiroshima.jpg', 220)}" width="220" height="220"></a><figcaption>A survivor tree in Hiroshima</figcaption></figure>
+<figure typeof="mw:File/Thumb"><a href="/wiki/File:Hiroshima.jpg" class="mw-file-description"><img src="${img('Hiroshima.jpg', 250)}" width="220" height="220"></a><figcaption>A survivor tree in Hiroshima</figcaption></figure>
 <p>The seeds smell like rancid butter, which is why many cities plant only male trees. Despite this, roasted ginkgo nuts are a delicacy in China and Japan, and are served at weddings.</p>
 <h2>References</h2><p>Nothing to see here, reference section skipped.</p>
 </div>`;
@@ -44,6 +44,11 @@ export function handle(url) {
   const u = new URL(url);
   const p = Object.fromEntries(u.searchParams);
   if (u.hostname === 'upload.wikimedia.org') {
+    // Like Wikimedia: only standard thumbnail widths are served.
+    const width = Number(u.pathname.match(/\/(\d+)px-/)?.[1]);
+    if (width && ![20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840].includes(width)) {
+      return { status: 400, contentType: 'text/html', body: 'non-standard thumbnail size' };
+    }
     const name = u.pathname.split('-').slice(1).join('-');
     return { contentType: 'image/svg+xml', body: images[name] ?? images['Ginkgo_tree.jpg'] };
   }
@@ -58,8 +63,8 @@ export function handle(url) {
             index: 1,
             imageinfo: [
               {
-                thumburl: `https:${img('Commons_cat.jpg', 320)}`,
-                url: `https:${img('Commons_cat.jpg', 1200)}`,
+                thumburl: `https:${img('Commons_cat.jpg', 330)}`,
+                url: `https:${img('Commons_cat.jpg', 1280)}`,
                 width: 1200,
                 height: 900,
                 descriptionurl: 'https://commons.wikimedia.org/wiki/File:Commons_cat.jpg',
@@ -79,7 +84,7 @@ export function handle(url) {
     return json({
       query: {
         pages: [
-          { title: 'Ginkgo', index: 1, description: 'Genus of plants', thumbnail: { source: `https:${img('Ginkgo_leaf.jpg', 160)}` } },
+          { title: 'Ginkgo', index: 1, description: 'Genus of plants', thumbnail: { source: `https:${img('Ginkgo_leaf.jpg', 250)}` } },
           { title: 'Ginkgo biloba', index: 2, description: 'Species of tree' },
         ],
       },
@@ -90,7 +95,7 @@ export function handle(url) {
       query: {
         pages: [
           { title: 'Brillenkauz', extract: 'Der Brillenkauz ist eine Eulenart aus Mittel- und Südamerika. Er ist nachtaktiv.', description: 'Art der Gattung Pulsatrix' },
-          { title: 'Hallig', extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.', thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 400)}` } },
+          { title: 'Hallig', extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.', thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}` } },
         ],
       },
     });
@@ -103,7 +108,7 @@ export function handle(url) {
         title: lang === 'de' ? `Datei:${t.slice(5)}` : t,
         imageinfo: [
           {
-            thumburl: `https:${img(name, 1600)}`,
+            thumburl: `https:${img(name, 1920)}`,
             thumbwidth: w,
             thumbheight: h,
             descriptionurl: `https://commons.wikimedia.org/wiki/File:${name}`,

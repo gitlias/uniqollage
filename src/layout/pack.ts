@@ -1,4 +1,4 @@
-import type { Tile } from '../model';
+import type { Skin, Tile } from '../model';
 import { imageBoxWidth, tileHeight } from '../render/tiles';
 import { stripMarkup } from '../text/markup';
 import { font } from '../text/fonts';
@@ -75,7 +75,7 @@ function spanFor(t: Tile, cols: number, colW: number, gap: number, b: number, r:
   return Math.max(1, Math.min(s, cols, Math.max(2, Math.ceil(cols * 0.67))));
 }
 
-function attempt(tiles: Tile[], area: Box, b: number, seed: number): Attempt {
+function attempt(tiles: Tile[], area: Box, b: number, seed: number, skin: Skin): Attempt {
   const gap = b * 1.1;
   const cols = Math.max(1, Math.round((area.w + gap) / (b * 15 + gap)));
   const colW = (area.w - (cols - 1) * gap) / cols;
@@ -86,7 +86,7 @@ function attempt(tiles: Tile[], area: Box, b: number, seed: number): Attempt {
     const span = spanFor(t, cols, colW, gap, b, r());
     const tie = r();
     const w = span * colW + (span - 1) * gap;
-    const h = tileHeight(t, w, b);
+    const h = tileHeight(t, w, b, skin);
     let best = 0;
     let bestTop = Infinity;
     const starts = Array.from({ length: cols - span + 1 }, (_, i) => i);
@@ -107,13 +107,13 @@ function attempt(tiles: Tile[], area: Box, b: number, seed: number): Attempt {
 }
 
 /** Largest body size at which this variant fits, with its layout. */
-function fit(tiles: Tile[], area: Box, seed: number): { b: number; res: Attempt } | null {
+function fit(tiles: Tile[], area: Box, seed: number, skin: Skin): { b: number; res: Attempt } | null {
   let lo = 0.6;
   let hi = Math.min(area.w, area.h) / 6;
   let best: { b: number; res: Attempt } | null = null;
   for (let i = 0; i < 14; i++) {
     const mid = (lo + hi) / 2;
-    const a = attempt(tiles, area, mid, seed);
+    const a = attempt(tiles, area, mid, seed, skin);
     if (a.height <= area.h) {
       best = { b: mid, res: a };
       lo = mid;
@@ -127,7 +127,7 @@ function fit(tiles: Tile[], area: Box, seed: number): { b: number; res: Attempt 
  * tile in its columns or the bottom) grows taller by cropping its picture,
  * like Wikipedia's fixed-size thumbnails do.
  */
-function fillHoles(res: Attempt, bottom: number, b: number): void {
+function fillHoles(res: Attempt, bottom: number, b: number, skin: Skin): void {
   for (const s of res.slots) {
     const t = s.tile;
     if (t.type !== 'image') continue;
@@ -138,7 +138,7 @@ function fillHoles(res: Attempt, bottom: number, b: number): void {
     }
     const free = limit - (t.y + s.h);
     if (free < b * 0.5) continue;
-    const iw = imageBoxWidth(t, b);
+    const iw = imageBoxWidth(t, b, skin);
     const ih = iw / t.image.aspect;
     const grow = Math.min(free, ih * 0.8); // crop at most to ~55% of the original aspect
     s.tile = { ...t, boxAspect: iw / (ih + grow) };
@@ -159,7 +159,12 @@ const VARIANTS = 6;
  * With `autoSize`, tries a few span variants and picks the one that allows the
  * largest body size (mm); otherwise uses `baseSize`.
  */
-export function arrange(tiles: Tile[], area: Box, opts: { baseSize: number; autoSize: boolean; seed: number }): ArrangeResult {
+export function arrange(
+  tiles: Tile[],
+  area: Box,
+  opts: { baseSize: number; autoSize: boolean; seed: number; skin?: Skin },
+): ArrangeResult {
+  const skin = opts.skin ?? 'vector2010';
   if (!tiles.length) return { tiles, baseSize: opts.baseSize, overflow: false };
   // Start from uncropped images so repeated arranging does not accumulate crops.
   const clean = tiles.map((t) => (t.type === 'image' && t.boxAspect ? { ...t, boxAspect: undefined } : t));
@@ -168,7 +173,7 @@ export function arrange(tiles: Tile[], area: Box, opts: { baseSize: number; auto
   if (opts.autoSize) {
     let best: { b: number; res: Attempt } | null = null;
     for (let v = 0; v < VARIANTS; v++) {
-      const f = fit(clean, area, opts.seed + v * 7919);
+      const f = fit(clean, area, opts.seed + v * 7919, skin);
       if (f && (!best || f.b > best.b)) best = f;
     }
     if (best) {
@@ -176,9 +181,9 @@ export function arrange(tiles: Tile[], area: Box, opts: { baseSize: number; auto
       res = best.res;
     } else b = 0.6;
   }
-  res ??= attempt(clean, area, b, opts.seed);
+  res ??= attempt(clean, area, b, opts.seed, skin);
   const overflow = res.height > area.h + 1e-6;
-  fillHoles(res, res.height, b);
+  fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
   // scaling y by k ≥ 1 keeps every gap at least as large as before).
   const k = res.height > 0 && res.height < area.h ? area.h / res.height : 1;

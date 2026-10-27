@@ -1,4 +1,7 @@
 import { normalize, useStore, updateAndRelayout } from '../store';
+import type { Skin } from '../model';
+
+const SKINS: Skin[] = ['vector2010', 'vector2022', 'monobook', 'minerva'];
 import { useT } from '../i18n';
 import { garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
 
@@ -160,6 +163,16 @@ export function Toolbar() {
             );
           })}
         </div>
+        <label title={t('skinHint')}>
+          {t('skin')}
+          <select value={p.skin ?? 'vector2010'} onChange={(e) => updateAndRelayout((x) => ({ ...x, skin: e.target.value as Skin }))}>
+            {SKINS.map((k) => (
+              <option key={k} value={k}>
+                {t(`skin_${k}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="check" title={t('nightModeHint')}>
           <input type="checkbox" checked={p.theme === 'dark'} onChange={(e) => s.update((x) => ({ ...x, theme: e.target.checked ? 'dark' : 'light' }))} />{' '}
           {t('nightMode')}

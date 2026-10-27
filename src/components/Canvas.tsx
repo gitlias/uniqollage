@@ -135,7 +135,7 @@ export function Canvas() {
               start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y });
             }}
           >
-            <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} />
+            <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} />
             <rect
               transform={`translate(${p.tile.x} ${p.tile.y}) rotate(${p.tile.rot} ${p.tile.w / 2} ${p.h / 2})`}
               width={p.tile.w}

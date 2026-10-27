@@ -4,6 +4,27 @@ import { parseArticle, parseDyk, type Figure, type ParsedArticle } from './parse
 
 // Thin client for the MediaWiki Action API (CORS via origin=*).
 
+// Wikimedia only serves thumbnails in these widths; other widths are rejected
+// (HTTP 400) when hotlinked. https://www.mediawiki.org/wiki/Common_thumbnail_sizes
+export const THUMB_WIDTHS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840];
+/** Width used for images placed on the collage (print quality). */
+const PRINT_WIDTH = 1920;
+
+/**
+ * Turn an upload.wikimedia.org thumbnail URL into the original file URL.
+ * Used to repair tiles saved with non-standard thumbnail widths.
+ */
+export function originalFromThumb(url: string): string {
+  const m = url.match(/^(https:\/\/upload\.wikimedia\.org\/[^/]+\/[^/]+)\/thumb\/(.+)\/[^/]+$/);
+  return m ? `${m[1]}/${m[2]}` : url;
+}
+
+/** True for a thumbnail URL whose width Wikimedia no longer serves. */
+export function isNonStandardThumb(url: string): boolean {
+  const m = url.match(/^https:\/\/upload\.wikimedia\.org\/.+\/thumb\/.+\/(\d+)px-[^/]+$/);
+  return !!m && !THUMB_WIDTHS.includes(Number(m[1]));
+}
+
 const API_UA = 'Uniqollage/0.1 (https://github.com/gitlias/uniqollage; collage editor)';
 type Host = Lang | 'commons';
 
@@ -51,7 +72,7 @@ export async function searchArticles(lang: Lang, q: string): Promise<SearchHit[]
     gsrnamespace: 0,
     prop: 'pageimages|description',
     piprop: 'thumbnail',
-    pithumbsize: 160,
+    pithumbsize: 250,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pages: any[] = json.query?.pages ?? [];
@@ -70,7 +91,7 @@ export interface ImageInfo {
   page: string;
 }
 
-/** Full-resolution (≤1600px) URLs, sizes and licence data for files. */
+/** Print-resolution (≤1920px) URLs, sizes and licence data for files. */
 export async function imageInfo(host: Host, files: string[], lang: Lang = 'en'): Promise<Map<string, ImageInfo>> {
   const out = new Map<string, ImageInfo>();
   for (let i = 0; i < files.length; i += 50) {
@@ -80,7 +101,7 @@ export async function imageInfo(host: Host, files: string[], lang: Lang = 'en'):
       titles: batch.map((f) => `File:${f}`).join('|'),
       prop: 'imageinfo',
       iiprop: 'url|size|extmetadata',
-      iiurlwidth: 1600,
+      iiurlwidth: PRINT_WIDTH,
       iiextmetadatafilter: 'LicenseShortName|Artist|ImageDescription',
       iiextmetadatalanguage: lang,
     });
@@ -153,7 +174,7 @@ export async function randomArticles(lang: Lang, n = 5): Promise<RandomArticle[]
     exsentences: 3,
     exlimit: n,
     piprop: 'thumbnail',
-    pithumbsize: 400,
+    pithumbsize: 500,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ((json.query?.pages ?? []) as any[]).map((p) => ({
@@ -199,7 +220,7 @@ export async function searchCommons(q: string, lang: Lang): Promise<CommonsHit[]
     gsrlimit: 24,
     prop: 'imageinfo',
     iiprop: 'url|size|extmetadata',
-    iiurlwidth: 320,
+    iiurlwidth: 330,
     iiextmetadatafilter: 'LicenseShortName|Artist|ImageDescription',
     iiextmetadatalanguage: lang,
   });

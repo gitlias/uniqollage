@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isNonStandardThumb, originalFromThumb } from './wiki/api';
 import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
 import { arrange, shuffled } from './layout/pack';
 import { contentBox } from './render/collage';
@@ -11,6 +12,7 @@ export function emptyProject(): Project {
     productId: 'basic-t',
     sizeId: 'M',
     theme: 'light',
+    skin: 'vector2010',
     landscape: false,
     margin: 15,
     customArea: { w: 250, h: 320 },
@@ -40,9 +42,17 @@ export function normalize(p: Project): Project {
   return { ...p, productId: product.id, sizeId: size.id, garment, theme };
 }
 
+/** Images saved with thumbnail widths Wikimedia no longer serves fall back to the original file. */
+function repairImage<T extends { src: string } | undefined>(img: T): T {
+  return img && isNonStandardThumb(img.src) ? { ...img, src: originalFromThumb(img.src) } : img;
+}
+
 /** Fill in fields added after a project was saved and map legacy product ids. */
 export function migrate(p: Project): Project {
-  return normalize({ ...emptyProject(), ...p, theme: p.theme ?? 'light' });
+  const tiles = (p.tiles ?? []).map((t) =>
+    t.type === 'image' ? { ...t, image: repairImage(t.image) } : t.type === 'infobox' ? { ...t, image: repairImage(t.image) } : t,
+  );
+  return normalize({ ...emptyProject(), ...p, tiles, theme: p.theme ?? 'light' });
 }
 
 interface State {
@@ -74,7 +84,7 @@ interface State {
 function relayout(p: Project, shuffle: boolean): Project {
   const seed = shuffle ? Math.floor(Math.random() * 2 ** 31) : p.seed;
   const order = shuffle ? shuffled(p.tiles, seed) : p.tiles;
-  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed });
+  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin });
   return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
 }
 

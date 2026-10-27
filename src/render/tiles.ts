@@ -1,4 +1,4 @@
-import type { ImageTile, InfoboxTile, Theme, Tile, TextTile, TitleTile } from '../model';
+import type { ImageStyle, ImageTile, InfoboxTile, Skin, Theme, Tile, TextTile, TitleTile } from '../model';
 import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
 
@@ -59,8 +59,32 @@ export const PALETTES: Record<Theme, Palette> = {
   },
 };
 
+/** Light-mode colours that differ between skins. */
+const SKIN_COLORS: Record<Skin, Partial<Palette>> = {
+  vector2022: {},
+  vector2010: { link: '#0645ad' },
+  monobook: { link: '#002bb8', frameBorder: '#cccccc', frameBg: '#f9f9f9', rule: '#aaaaaa' },
+  minerva: {},
+};
+
+export const SKIN_IMAGE_STYLE: Record<Skin, ImageStyle> = {
+  vector2010: 'classic',
+  monobook: 'classic',
+  vector2022: 'modern',
+  minerva: 'mobile',
+};
+
+export function paletteFor(theme: Theme, skin: Skin): Palette {
+  return theme === 'light' ? { ...PALETTES.light, ...SKIN_COLORS[skin] } : PALETTES.dark;
+}
+
+export function imageStyleOf(t: ImageTile, skin: Skin): ImageStyle {
+  return t.imageStyle ?? (t.frame === false ? 'plain' : SKIN_IMAGE_STYLE[skin]);
+}
+
 // Set for the duration of one renderTile call.
 let pal: Palette = PALETTES.light;
+let skin: Skin = 'vector2010';
 
 export const TAGLINE = {
   en: 'From Wikipedia, the free encyclopedia',
@@ -77,8 +101,10 @@ function text(markup: string, x: number, y: number, width: number, opts: Paramet
 }
 
 function renderTitle(t: TitleTile, b: number): Rendered {
-  const size = b * 2.1;
-  const { block, prims } = text(t.text, 0, 0, t.w, { size, lineHeight: 1.25, family: 'serif', color: pal.title });
+  // MonoBook used a plain sans-serif heading; the other skins Linux Libertine.
+  const sans = skin === 'monobook';
+  const size = b * (sans ? 1.88 : 2.1);
+  const { block, prims } = text(t.text, 0, 0, t.w, { size, lineHeight: 1.25, family: sans ? 'sans' : 'serif', color: pal.title });
   let y = block.height + size * 0.12;
   const sw = Math.max(b * 0.06, 0.12);
   prims.push({ t: 'line', x1: 0, y1: y, x2: t.w, y2: y, stroke: pal.rule, sw });
@@ -96,45 +122,80 @@ function renderText(t: TextTile, b: number): Rendered {
   return { h: block.height, prims };
 }
 
-/** Width of the image box inside an image tile. */
-export function imageBoxWidth(t: ImageTile, baseSize: number): number {
-  return t.frame ? t.w - 2 * baseSize * t.scale * 0.22 : t.w;
+interface FrameGeometry {
+  /** Outer border width (0 = no box). */
+  sw: number;
+  /** Padding between box and image. */
+  pad: number;
+}
+
+function frameGeometry(style: ImageStyle, b: number): FrameGeometry {
+  if (style === 'classic' || style === 'modern') return { sw: Math.max(b * 0.07, 0.1), pad: b * 0.22 };
+  return { sw: 0, pad: 0 };
+}
+
+/** Width of the picture inside an image tile. */
+export function imageBoxWidth(t: ImageTile, baseSize: number, s: Skin = 'vector2010'): number {
+  const g = frameGeometry(imageStyleOf(t, s), baseSize * t.scale);
+  return t.w - 2 * (g.pad + g.sw);
+}
+
+/** MediaWiki's "enlarge" icon: two overlapping windows. */
+function magnifyIcon(x: number, y: number, s: number): Prim[] {
+  const sw = s * 0.07;
+  const stroke = '#72777d';
+  return [
+    { t: 'rect', x, y: y + s * 0.3, w: s * 0.68, h: s * 0.5, fill: pal.frameBg, stroke, sw },
+    { t: 'rect', x: x + s * 0.4, y, w: s * 0.6, h: s * 0.45, fill: pal.frameBg, stroke, sw },
+  ];
 }
 
 function renderImage(t: ImageTile, b: number): Rendered {
-  const prims: Prim[] = [];
+  const style = imageStyleOf(t, skin);
   const aspect = t.boxAspect ?? t.image.aspect;
-  if (!t.frame) {
-    const h = t.w / aspect;
-    prims.push({ t: 'image', x: 0, y: 0, w: t.w, h, href: t.image.src });
-    let y = h;
-    if (t.caption.trim()) {
-      y += b * 0.3;
-      const cap = text(t.caption, 0, y, t.w, { size: b * 0.88, lineHeight: 1.45 });
-      prims.push(...cap.prims);
+  const { sw, pad } = frameGeometry(style, b);
+  const inset = sw + pad;
+  const iw = t.w - 2 * inset;
+  const ih = iw / aspect;
+  const body: Prim[] = [{ t: 'image', x: inset, y: inset, w: iw, h: ih, href: t.image.src }];
+  let y = inset + ih;
+  const caption = t.caption.trim();
+
+  if (style === 'classic') {
+    // Vector 2010 / MonoBook: bordered image on a grey card, caption at 94 %
+    // with the enlarge icon floated right.
+    body.push({ t: 'rect', x: inset, y: inset, w: iw, h: ih, stroke: pal.frameBorder, sw });
+    const size = b * 0.94;
+    const icon = b * 1.05;
+    y += pad;
+    if (caption) {
+      const cap = text(t.caption, inset + pad * 0.5, y + pad * 0.5, iw - icon - pad * 1.5, { size, lineHeight: 1.4 });
+      body.push(...cap.prims, ...magnifyIcon(inset + iw - icon, y + pad * 0.5 + (size * 1.4 - icon * 0.8) / 2, icon));
+      y += cap.block.height + pad;
+    } else {
+      body.push(...magnifyIcon(inset + iw - icon, y, icon));
+      y += icon * 0.8 + pad;
+    }
+  } else if (style === 'modern') {
+    body.push({ t: 'rect', x: inset, y: inset, w: iw, h: ih, stroke: pal.hairline, sw: sw * 0.7 });
+    if (caption) {
+      y += b * 0.32;
+      const cap = text(t.caption, inset + b * 0.1, y, iw - b * 0.2, { size: b * 0.88, lineHeight: 1.45 });
+      body.push(...cap.prims);
       y += cap.block.height;
     }
-    return { h: y, prims };
-  }
-  const sw = Math.max(b * 0.07, 0.1);
-  const pad = b * 0.22;
-  const iw = t.w - 2 * pad;
-  const ih = iw / aspect;
-  let y = pad;
-  const body: Prim[] = [];
-  body.push({ t: 'image', x: pad, y, w: iw, h: ih, href: t.image.src });
-  // Hairline around the image itself, as in Vector's thumb frames.
-  body.push({ t: 'rect', x: pad, y, w: iw, h: ih, stroke: pal.hairline, sw: sw * 0.7 });
-  y += ih;
-  if (t.caption.trim()) {
-    y += b * 0.32;
-    const cap = text(t.caption, pad + b * 0.1, y, iw - b * 0.2, { size: b * 0.88, lineHeight: 1.45 });
+    y += pad * 0.4;
+  } else if (caption) {
+    // Mobile: small grey caption; plain: regular caption.
+    const mobile = style === 'mobile';
+    y += b * (mobile ? 0.45 : 0.3);
+    const cap = text(t.caption, 0, y, t.w, { size: b * (mobile ? 0.82 : 0.88), lineHeight: 1.45, color: mobile ? pal.muted : pal.ink });
     body.push(...cap.prims);
     y += cap.block.height;
   }
-  y += pad * 1.4;
-  prims.push({ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.frameBorder, sw }, ...body);
-  return { h: y, prims };
+  y += inset;
+  if (!sw) return { h: y, prims: body };
+  return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.frameBorder, sw }, ...body] };
 }
 
 function renderInfobox(t: InfoboxTile, b: number): Rendered {
@@ -180,13 +241,14 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
 }
 
 // Rendering is pure; cache by tile identity (tiles are immutable in the store) and size.
-const cache = new WeakMap<Tile, { b: number; theme: Theme; r: Rendered }>();
+const cache = new WeakMap<Tile, { b: number; theme: Theme; skin: Skin; r: Rendered }>();
 
-export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light'): Rendered {
+export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light', sk: Skin = 'vector2010'): Rendered {
   const b = baseSize * t.scale;
   const hit = cache.get(t);
-  if (hit && hit.b === b && hit.theme === theme) return hit.r;
-  pal = PALETTES[theme];
+  if (hit && hit.b === b && hit.theme === theme && hit.skin === sk) return hit.r;
+  pal = paletteFor(theme, sk);
+  skin = sk;
   let r: Rendered;
   switch (t.type) {
     case 'title':
@@ -202,15 +264,15 @@ export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light'): R
       r = renderInfobox(t, b);
       break;
   }
-  cache.set(t, { b, theme, r });
+  cache.set(t, { b, theme, skin: sk, r });
   return r;
 }
 
 /** Height a tile would have at width `w` (used by the auto layout). */
-export function tileHeight(t: Tile, w: number, baseSize: number): number {
+export function tileHeight(t: Tile, w: number, baseSize: number, sk: Skin = 'vector2010'): number {
   measuring = true;
   try {
-    return renderTile({ ...t, w } as Tile, baseSize).h;
+    return renderTile({ ...t, w } as Tile, baseSize, 'light', sk).h;
   } finally {
     measuring = false;
   }

@@ -2,7 +2,7 @@ import type { Project, Tile } from '../model';
 import { areaOf, isPoster } from '../products';
 import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
-import { PALETTES, renderTile, type Prim } from './tiles';
+import { PALETTES, paletteFor, renderTile, type Prim } from './tiles';
 import type { Box } from '../layout/pack';
 
 export function creditSize(area: { w: number }): number {
@@ -73,9 +73,9 @@ export interface Composition {
 export function compose(p: Project, lang: 'en' | 'de'): Composition {
   const area = areaOf(p);
   const m = marginOf(p);
-  const muted = PALETTES[p.theme].muted;
+  const muted = paletteFor(p.theme, p.skin ?? 'vector2010').muted;
   const placed = p.tiles.map((tile) => {
-    const r = renderTile(tile, p.baseSize, p.theme);
+    const r = renderTile(tile, p.baseSize, p.theme, p.skin);
     return { tile, h: r.h, prims: r.prims };
   });
   const credit: Prim[] = [];
@@ -84,10 +84,10 @@ export function compose(p: Project, lang: 'en' | 'de'): Composition {
     if (text) {
       const size = creditSize(area);
       const w = area.w - 2 * m;
-      const block = layoutText(parseMarkup(text), w, { size, lineHeight: 1.3, color: muted, align: 'center' });
+      const block = layoutText(parseMarkup(text), w, { size, lineHeight: 1.3, color: muted, align: 'left' });
       // Shrink to a single line if needed.
       const scale = block.lines > 1 ? Math.max(0.55, w / (block.maxLineWidth * 1.02 + 1)) : 1;
-      const final = scale < 1 ? layoutText(parseMarkup(text), w, { size: size * scale, lineHeight: 1.3, color: muted, align: 'center' }) : block;
+      const final = scale < 1 ? layoutText(parseMarkup(text), w, { size: size * scale, lineHeight: 1.3, color: muted, align: 'left' }) : block;
       const y = area.h - m - final.height;
       for (const pth of final.paths) credit.push({ t: 'path', d: pth.d, fill: pth.fill, x: m, y });
     }

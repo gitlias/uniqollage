@@ -1,4 +1,4 @@
-import type { Tile } from '../model';
+import type { Tile, ImageStyle } from '../model';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { stripMarkup } from '../text/markup';
@@ -61,8 +61,21 @@ export function Inspector() {
                 {t('caption')}
                 <textarea rows={4} value={tile.caption} placeholder={t('captionPlaceholder')} {...textProps} onChange={(e) => set({ caption: e.target.value })} />
               </label>
-              <label className="check">
-                <input type="checkbox" checked={tile.frame} onChange={(e) => s.patchTile(tile.id, { frame: e.target.checked })} /> {t('frame')}
+              <label>
+                {t('imageStyle')}
+                <select
+                  value={tile.imageStyle ?? (tile.frame === false ? 'plain' : 'auto')}
+                  onChange={(e) => {
+                    const v = e.target.value as ImageStyle | 'auto';
+                    s.patchTile(tile.id, { imageStyle: v === 'auto' ? undefined : v, frame: v !== 'plain' });
+                  }}
+                >
+                  {(['auto', 'classic', 'modern', 'mobile', 'plain'] as const).map((v) => (
+                    <option key={v} value={v}>
+                      {t(`imageStyle_${v}`)}
+                    </option>
+                  ))}
+                </select>
               </label>
             </>
           )}

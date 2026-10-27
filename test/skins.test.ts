@@ -1,0 +1,54 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { setupFonts } from './setup-fonts';
+import { renderTile, paletteFor } from '../src/render/tiles';
+import { isNonStandardThumb, originalFromThumb } from '../src/wiki/api';
+import { emptyProject, migrate } from '../src/store';
+import type { ImageTile, Project } from '../src/model';
+
+beforeAll(setupFonts);
+
+const thumb = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ginkgo.jpg/1600px-Ginkgo.jpg';
+const image: ImageTile = {
+  id: 'i',
+  type: 'image',
+  x: 0,
+  y: 0,
+  w: 60,
+  rot: 0,
+  scale: 1,
+  source: { kind: 'wikipedia' },
+  image: { src: thumb, aspect: 0.75 },
+  caption: 'May 22, 1944 [[Life Magazine]] Picture of the Week',
+  frame: true,
+};
+
+describe('Wikimedia thumbnail sizes', () => {
+  it('detects non-standard widths and falls back to the original', () => {
+    expect(isNonStandardThumb(thumb)).toBe(true);
+    expect(isNonStandardThumb(thumb.replace('1600px', '1920px'))).toBe(false);
+    expect(originalFromThumb(thumb)).toBe('https://upload.wikimedia.org/wikipedia/commons/a/ab/Ginkgo.jpg');
+  });
+  it('repairs saved projects on load', () => {
+    const p = migrate({ ...emptyProject(), tiles: [image] } as Project);
+    expect((p.tiles[0] as ImageTile).image.src).toBe('https://upload.wikimedia.org/wikipedia/commons/a/ab/Ginkgo.jpg');
+  });
+});
+
+describe('skins and image styles', () => {
+  const rects = (t: ImageTile, skin: Parameters<typeof renderTile>[3]) => renderTile({ ...t }, 3, 'light', skin).prims.filter((p) => p.t === 'rect').length;
+  it('classic thumbnails have a card, an image border and the enlarge icon', () => {
+    expect(rects(image, 'vector2010')).toBe(4);
+    expect(rects(image, 'vector2022')).toBe(2);
+    expect(rects(image, 'minerva')).toBe(0);
+    expect(rects({ ...image, imageStyle: 'classic' }, 'minerva')).toBe(4);
+    expect(rects({ ...image, frame: false }, 'vector2010')).toBe(0);
+  });
+  it('uses the skin link colours', () => {
+    expect(paletteFor('light', 'vector2010').link).toBe('#0645ad');
+    expect(paletteFor('light', 'monobook').link).toBe('#002bb8');
+    expect(paletteFor('light', 'vector2022').link).toBe('#3366cc');
+    expect(paletteFor('dark', 'vector2010').link).toBe('#88a3e8');
+    const fills = renderTile({ ...image }, 3, 'light', 'vector2010').prims.filter((p) => p.t === 'path').map((p) => (p as { fill: string }).fill);
+    expect(fills).toContain('#0645ad');
+  });
+});

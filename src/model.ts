@@ -57,6 +57,8 @@ export interface ImageTile extends TileBase {
   image: ImageRef;
   caption: string;
   frame: boolean;
+  /** Overrides the skin's default image style. */
+  imageStyle?: ImageStyle;
   /** Displayed image box aspect (w/h) when cropped to fill space; defaults to image.aspect. */
   boxAspect?: number;
 }
@@ -78,6 +80,18 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 
 export type Theme = 'light' | 'dark';
 
+/** Wikipedia look to imitate: skins differ in link colour, headings and image frames. */
+export type Skin = 'vector2010' | 'vector2022' | 'monobook' | 'minerva';
+
+/**
+ * Image frame:
+ * - classic: grey box, bordered image, caption with "enlarge" icon (Vector 2010/MonoBook thumbs)
+ * - modern:  Vector 2022 figure (grey box, no icon)
+ * - mobile:  Minerva, no box, small grey caption
+ * - plain:   image with caption underneath
+ */
+export type ImageStyle = 'classic' | 'modern' | 'mobile' | 'plain';
+
 export interface Project {
   version: 1;
   /** UTme! region whose products/sizes are offered (see products.ts). */
@@ -87,6 +101,7 @@ export interface Project {
   sizeId: string;
   /** 'dark' = Wikipedia night mode palette, for black garments. */
   theme: Theme;
+  skin?: Skin;
   /** Posters only: landscape orientation. */
   landscape?: boolean;
   /** Posters only: white margin around the collage, mm. */

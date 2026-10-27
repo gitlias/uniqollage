@@ -19,6 +19,7 @@ page.on('dialog', (d) => {
 });
 await page.route(/wikipedia\.org|wikimedia\.org/, (route) => {
   const r = handle(route.request().url());
+  if ((r.status ?? 200) >= 400 && route.request().url().includes('upload.wikimedia.org')) errors.push(`image rejected: ${route.request().url()}`);
   route.fulfill({ status: r.status ?? 200, contentType: r.contentType, body: r.body, headers: { 'access-control-allow-origin': '*' } });
 });
 
@@ -90,6 +91,11 @@ await step('shuffle and screenshot editor', async () => {
   await page.click('button >> text=Shuffle');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/editor.png` });
+});
+
+await step('zoom on a classic image tile', async () => {
+  const img = page.locator('.canvas .tile').filter({ has: page.locator('image') }).first();
+  await img.screenshot({ path: `${out}/tile-classic.png`, scale: 'device' });
 });
 
 await step('select, drag, rotate a tile', async () => {

@@ -119,7 +119,7 @@ export function Mockup() {
   const design = (
     <>
       {c.placed.map((p) => (
-        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} theme={project.theme} />
+        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} />
       ))}
       {c.credit.map((p, i) => (
         <PrimEl key={i} p={p} />
