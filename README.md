@@ -30,12 +30,18 @@ files.
   largest text size that fills the print area, crops images to close holes;
   *Shuffle* for a new arrangement. Drag to move, handles to resize/rotate,
   per-tile text scale, undo/redo, keyboard shortcuts.
-- **UTme! presets** – T-shirt (large/square/chest), tote, mini tote,
-  sweatshirt and custom sizes. Print areas are approximations — check the
-  boundary shown in the UTme! app.
-- **Export** – transparent PNG at 150/200/300 dpi for the UTme! upload,
-  vector SVG and PDF (text is outlined), attribution list (.txt).
-- **Garment mockup** in several colours.
+- **UTme! products with official print areas per size** – Basic T, U Crew
+  Neck T, AIRism Cotton Oversized T, Kids Basic T, Sweatshirt, tote and mini
+  tote (see [docs/utme-research.md](docs/utme-research.md)), plus custom sizes.
+- **Export** – transparent PNG sized to the UTme! upload limits
+  (2048 × 2304 px Japan, 2048 × 2048 px other regions, or 300 dpi), with a
+  file-size check and protection against UTme! dropping pure white; vector
+  SVG and PDF (text is outlined); attribution list (.txt).
+- **Garment mockups** drawn to the official measurements, with the print
+  area at the official distance below the collar, in the colours each item
+  is sold in.
+- **Night mode** – Wikipedia's dark palette for black T-shirts and
+  sweatshirts (switched on automatically for dark garments).
 - **Licensing helper** – optional credit strip on the print and per-item
   attribution list (Wikipedia text is CC BY-SA 4.0).
 - Autosave in the browser (IndexedDB) and project import/export (.json).

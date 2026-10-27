@@ -40,6 +40,7 @@ export function App() {
   const uiLang = useStore((s) => s.uiLang);
   const setUiLang = useStore((s) => s.setUiLang);
   const productId = useStore((s) => s.project.productId);
+  const sizeId = useStore((s) => s.project.sizeId);
   const tileCount = useStore((s) => s.project.tiles.length);
   const tab = useUi((s) => s.tab);
   const setTab = useUi((s) => s.setTab);
@@ -143,7 +144,10 @@ export function App() {
 
       <main className="content">
         <div className="title-bar">
-          <h1 className="first-heading">{productById(productId).name[uiLang]}</h1>
+          <h1 className="first-heading">
+            {productById(productId).name[uiLang]}
+            {productById(productId).sizes.length > 1 ? ` (${sizeId})` : ''}
+          </h1>
           <span className="muted small">
             {tileCount} {t('ofTiles')}
           </span>

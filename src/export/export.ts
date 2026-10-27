@@ -1,6 +1,6 @@
 import type { Project } from '../model';
 import { compose, compositionToSvg, type Composition } from '../render/collage';
-import { printArea, productById } from '../products';
+import { exportPixels, printArea, productById, type UploadTargetId } from '../products';
 
 // Exports. Remote images are fetched (Wikimedia serves CORS headers) and
 // normalised to PNG/JPEG data URLs so the SVG is self-contained, rasterises
@@ -61,7 +61,7 @@ async function inlineImages(c: Composition): Promise<Map<string, string>> {
 function baseName(p: Project): string {
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  return `uniqollage-${productById(p.productId).id}-${stamp}`;
+  return `uniqollage-${productById(p.productId).id}-${p.sizeId}-${stamp}`;
 }
 
 export async function exportSvg(p: Project, lang: 'en' | 'de'): Promise<void> {
@@ -70,31 +70,52 @@ export async function exportSvg(p: Project, lang: 'en' | 'de'): Promise<void> {
   download(new Blob([svg], { type: 'image/svg+xml' }), `${baseName(p)}.svg`);
 }
 
-export function pngSize(p: Project, dpi: number): { w: number; h: number } {
-  const c = printArea(p.productId, p.customArea);
-  return { w: Math.round((c.w / 25.4) * dpi), h: Math.round((c.h / 25.4) * dpi) };
+/** Nudge pure white (#FFFFFF), which UTme! treats as transparent, to #FEFEFE. */
+function protectWhite(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] > 0 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) {
+      d[i] = d[i + 1] = d[i + 2] = 254;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
-export async function renderPng(p: Project, lang: 'en' | 'de', dpi: number, background?: string): Promise<Blob> {
+export async function renderPng(
+  p: Project,
+  lang: 'en' | 'de',
+  px: { w: number; h: number },
+  opts: { background?: string; keepWhite?: boolean } = {},
+): Promise<Blob> {
   const c = compose(p, lang);
-  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c), background });
-  const px = { w: Math.round((c.w / 25.4) * dpi), h: Math.round((c.h / 25.4) * dpi) };
+  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c), background: opts.background });
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const img = await loadImage(url);
     const canvas = document.createElement('canvas');
     canvas.width = px.w;
     canvas.height = px.h;
-    canvas.getContext('2d')!.drawImage(img, 0, 0, px.w, px.h);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, px.w, px.h);
+    if (opts.keepWhite) protectWhite(ctx, px.w, px.h);
     return await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'));
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-export async function exportPng(p: Project, lang: 'en' | 'de', dpi: number, transparent: boolean): Promise<void> {
-  const blob = await renderPng(p, lang, dpi, transparent ? undefined : '#ffffff');
-  download(blob, `${baseName(p)}-${dpi}dpi.png`);
+/** Export a PNG for an upload target; returns the file size in bytes. */
+export async function exportPng(
+  p: Project,
+  lang: 'en' | 'de',
+  target: UploadTargetId,
+  opts: { transparent: boolean; keepWhite: boolean },
+): Promise<number> {
+  const px = exportPixels(printArea(p.productId, p.customArea, p.sizeId), target);
+  const blob = await renderPng(p, lang, px, { background: opts.transparent ? undefined : '#ffffff', keepWhite: opts.keepWhite });
+  download(blob, `${baseName(p)}-${px.w}x${px.h}.png`);
+  return blob.size;
 }
 
 export async function exportPdf(p: Project, lang: 'en' | 'de'): Promise<void> {

@@ -1,5 +1,5 @@
-import type { ImageTile, InfoboxTile, Tile, TextTile, TitleTile } from '../model';
-import { layoutText, INK } from '../text/layout';
+import type { ImageTile, InfoboxTile, Theme, Tile, TextTile, TitleTile } from '../model';
+import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
 
 // Every tile renders to a small display list in local millimetre coordinates
@@ -17,12 +17,46 @@ export interface Rendered {
   prims: Prim[];
 }
 
-// Wikipedia (Vector) colours.
-const BORDER = '#a2a9b1';
-const FRAME_BORDER = '#c8ccd1';
-const FRAME_BG = '#f8f9fa';
-const MUTED = '#54595d';
-const INFOBOX_HEAD = '#dde6f3';
+export interface Palette {
+  ink: string;
+  title: string;
+  link: string;
+  muted: string;
+  rule: string;
+  frameBorder: string;
+  frameBg: string;
+  hairline: string;
+  infoboxHead: string;
+}
+
+/** Wikipedia (Vector) colours, and the night-mode variant for dark garments. */
+export const PALETTES: Record<Theme, Palette> = {
+  light: {
+    ink: '#202122',
+    title: '#000000',
+    link: '#3366cc',
+    muted: '#54595d',
+    rule: '#a2a9b1',
+    frameBorder: '#c8ccd1',
+    frameBg: '#f8f9fa',
+    hairline: '#eaecf0',
+    infoboxHead: '#dde6f3',
+  },
+  dark: {
+    ink: '#eaecf0',
+    title: '#f8f9fa',
+    link: '#88a3e8',
+    muted: '#a2a9b1',
+    rule: '#72777d',
+    frameBorder: '#54595d',
+    frameBg: '#202122',
+    hairline: '#404244',
+    infoboxHead: '#27354f',
+  },
+};
+
+// Set for the duration of one renderTile call.
+let pal: Palette = PALETTES.light;
 
 export const TAGLINE = {
   en: 'From Wikipedia, the free encyclopedia',
@@ -33,20 +67,20 @@ export const TAGLINE = {
 let measuring = false;
 
 function text(markup: string, x: number, y: number, width: number, opts: Parameters<typeof layoutText>[2]) {
-  const block = layoutText(parseMarkup(markup), Math.max(width, 1), { ...opts, measureOnly: measuring });
+  const block = layoutText(parseMarkup(markup), Math.max(width, 1), { color: pal.ink, linkColor: pal.link, ...opts, measureOnly: measuring });
   const prims: Prim[] = block.paths.map((p) => ({ t: 'path', d: p.d, fill: p.fill, x, y }));
   return { block, prims };
 }
 
 function renderTitle(t: TitleTile, b: number): Rendered {
   const size = b * 2.1;
-  const { block, prims } = text(t.text, 0, 0, t.w, { size, lineHeight: 1.25, family: 'serif', color: '#000' });
+  const { block, prims } = text(t.text, 0, 0, t.w, { size, lineHeight: 1.25, family: 'serif', color: pal.title });
   let y = block.height + size * 0.12;
   const sw = Math.max(b * 0.06, 0.12);
-  prims.push({ t: 'line', x1: 0, y1: y, x2: t.w, y2: y, stroke: BORDER, sw });
+  prims.push({ t: 'line', x1: 0, y1: y, x2: t.w, y2: y, stroke: pal.rule, sw });
   y += sw + b * 0.35;
   if (t.tagline) {
-    const tag = text(TAGLINE[t.source.lang ?? 'en'], 0, y, t.w, { size: b * 0.82, lineHeight: 1.4, color: MUTED });
+    const tag = text(TAGLINE[t.source.lang ?? 'en'], 0, y, t.w, { size: b * 0.82, lineHeight: 1.4, color: pal.muted });
     prims.push(...tag.prims);
     y += tag.block.height;
   }
@@ -86,7 +120,7 @@ function renderImage(t: ImageTile, b: number): Rendered {
   const body: Prim[] = [];
   body.push({ t: 'image', x: pad, y, w: iw, h: ih, href: t.image.src });
   // Hairline around the image itself, as in Vector's thumb frames.
-  body.push({ t: 'rect', x: pad, y, w: iw, h: ih, stroke: '#eaecf0', sw: sw * 0.7 });
+  body.push({ t: 'rect', x: pad, y, w: iw, h: ih, stroke: pal.hairline, sw: sw * 0.7 });
   y += ih;
   if (t.caption.trim()) {
     y += b * 0.32;
@@ -95,7 +129,7 @@ function renderImage(t: ImageTile, b: number): Rendered {
     y += cap.block.height;
   }
   y += pad * 1.4;
-  prims.push({ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: FRAME_BG, stroke: FRAME_BORDER, sw }, ...body);
+  prims.push({ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.frameBorder, sw }, ...body);
   return { h: y, prims };
 }
 
@@ -108,9 +142,9 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
   let y = pad;
 
   // Header band.
-  const head = text(t.heading, pad, 0, inner - b * 0.4, { size: b * 1.2, lineHeight: 1.3, color: INK, align: 'center' });
+  const head = text(t.heading, pad, 0, inner - b * 0.4, { size: b * 1.2, lineHeight: 1.3, align: 'center' });
   const headH = head.block.height + b * 0.5;
-  body.push({ t: 'rect', x: pad, y, w: inner, h: headH, fill: INFOBOX_HEAD });
+  body.push({ t: 'rect', x: pad, y, w: inner, h: headH, fill: pal.infoboxHead });
   body.push(...head.prims.map((p) => (p.t === 'path' ? { ...p, x: p.x + b * 0.2, y: y + b * 0.25 } : p)));
   y += headH + b * 0.4;
 
@@ -130,7 +164,7 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
   const labelW = inner * 0.4;
   const gap = b * 0.4;
   t.rows.forEach(([label, value], i) => {
-    if (i > 0) body.push({ t: 'line', x1: pad, y1: y, x2: pad + inner, y2: y, stroke: '#eaecf0', sw: sw * 0.8 });
+    if (i > 0) body.push({ t: 'line', x1: pad, y1: y, x2: pad + inner, y2: y, stroke: pal.hairline, sw: sw * 0.8 });
     y += b * 0.18;
     const l = text(`'''${label}'''`, pad, y, labelW - gap, { size, lineHeight: 1.4 });
     const v = text(value, pad + labelW, y, inner - labelW, { size, lineHeight: 1.4 });
@@ -138,16 +172,17 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
     y += Math.max(l.block.height, v.block.height) + b * 0.18;
   });
   y += pad;
-  return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: FRAME_BG, stroke: BORDER, sw }, ...body] };
+  return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.rule, sw }, ...body] };
 }
 
 // Rendering is pure; cache by tile identity (tiles are immutable in the store) and size.
-const cache = new WeakMap<Tile, { b: number; r: Rendered }>();
+const cache = new WeakMap<Tile, { b: number; theme: Theme; r: Rendered }>();
 
-export function renderTile(t: Tile, baseSize: number): Rendered {
+export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light'): Rendered {
   const b = baseSize * t.scale;
   const hit = cache.get(t);
-  if (hit && hit.b === b) return hit.r;
+  if (hit && hit.b === b && hit.theme === theme) return hit.r;
+  pal = PALETTES[theme];
   let r: Rendered;
   switch (t.type) {
     case 'title':
@@ -163,7 +198,7 @@ export function renderTile(t: Tile, baseSize: number): Rendered {
       r = renderInfobox(t, b);
       break;
   }
-  cache.set(t, { b, r });
+  cache.set(t, { b, theme, r });
   return r;
 }
 

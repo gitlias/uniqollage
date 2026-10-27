@@ -1,73 +1,124 @@
 import { useStore } from '../store';
 import { compose } from '../render/collage';
-import { GARMENT_COLORS, productById } from '../products';
+import { garmentColor, productById, sizeOf, type Shape, type SizeSpec } from '../products';
 import { PrimEl, TileView } from './TileView';
 
-// Simple flat-lay silhouettes in millimetres, with the print area origin.
-interface Shape {
+// Flat-lay silhouettes drawn to the official garment measurements (mm), with the
+// print area placed at the official distance below the front neck seam.
+
+interface Outline {
   w: number;
   h: number;
-  /** Silhouette path(s). */
   body: string;
-  /** Decorative seams/ribs drawn as strokes. */
   details: string;
-  /** Top-left of the print area (centred horizontally when x is omitted). */
-  print: { x?: number; y: number };
-  /** Handles etc. drawn in the garment colour but behind the body. */
   back?: string;
+  /** Print area top-left. */
+  px: number;
+  py: number;
 }
 
-const TSHIRT: Shape = {
-  w: 700,
-  h: 790,
-  body: 'M275 30 Q350 85 425 30 L520 50 L680 150 L625 270 L575 235 L580 760 L120 760 L125 235 L75 270 L20 150 L180 50 Z',
-  details: 'M275 30 Q350 100 425 30 M275 30 Q350 85 425 30 M125 235 L180 50 M575 235 L520 50 M120 745 L580 745',
-  print: { y: 120 },
-};
+const M = 40; // margin
 
-const SWEAT: Shape = {
-  w: 700,
-  h: 760,
-  body: 'M275 30 Q350 85 425 30 L520 50 L690 420 L640 445 L575 250 L580 720 L120 720 L125 250 L60 445 L10 420 L180 50 Z',
-  details: 'M275 30 Q350 105 425 30 M120 680 L580 680 M125 250 L180 50 M575 250 L520 50 M660 400 L620 425 M40 400 L80 425',
-  print: { y: 130 },
-};
+function topOutline(shape: Shape, s: SizeSpec): Outline {
+  const { length: L, width: W } = s.garment;
+  const S = s.garment.shoulder ?? W * 0.86;
+  const k = S / 450; // scale for neck/sleeve details relative to an adult M
+  const neckW = 190 * k;
+  const neckD = (shape === 'sweat' ? 85 : 90) * k;
+  const slope = 40 * k;
+  const armpit = L * (shape === 'oversized' ? 0.4 : shape === 'sweat' ? 0.37 : 0.34);
+  // Sleeve: length from shoulder point, angle below horizontal, opening width.
+  const sleeve =
+    shape === 'sweat'
+      ? { len: L * 0.88, deg: 62, open: W * 0.2 }
+      : shape === 'oversized'
+        ? { len: L * 0.36, deg: 38, open: W * 0.4 }
+        : { len: S * 0.47, deg: 35, open: W * 0.33 };
+  const a = (sleeve.deg * Math.PI) / 180;
+  const half = Math.max(S / 2 + sleeve.len * Math.cos(a), W / 2) + 10;
+  const cx = M + half;
+  const y0 = M;
 
-function tote(w: number, h: number, top: number, printTop: number): Shape {
-  const hl = w * 0.27;
-  const hr = w * 0.73;
-  const hh = top * 0.9;
+  const shoulderX = S / 2;
+  const outer = { x: shoulderX + sleeve.len * Math.cos(a), y: slope + sleeve.len * Math.sin(a) };
+  const inner = { x: outer.x - sleeve.open * Math.sin(a), y: outer.y + sleeve.open * Math.cos(a) };
+  const arm = { x: W / 2, y: armpit };
+
+  const side = (sx: 1 | -1) => (p: { x: number; y: number }) => `${(cx + sx * p.x).toFixed(1)} ${(y0 + p.y).toFixed(1)}`;
+  const R = side(1);
+  const Lf = side(-1);
+  const body = [
+    `M${Lf({ x: neckW / 2, y: 0 })}`,
+    `C${Lf({ x: neckW / 2, y: neckD * 0.75 })} ${Lf({ x: neckW * 0.22, y: neckD })} ${R({ x: 0, y: neckD })}`,
+    `C${R({ x: neckW * 0.22, y: neckD })} ${R({ x: neckW / 2, y: neckD * 0.75 })} ${R({ x: neckW / 2, y: 0 })}`,
+    `L${R({ x: shoulderX, y: slope })}`,
+    `L${R(outer)}`,
+    `L${R(inner)}`,
+    `L${R(arm)}`,
+    `L${R({ x: W / 2, y: L })}`,
+    `L${Lf({ x: W / 2, y: L })}`,
+    `L${Lf(arm)}`,
+    `L${Lf(inner)}`,
+    `L${Lf(outer)}`,
+    `L${Lf({ x: shoulderX, y: slope })}`,
+    'Z',
+  ].join(' ');
+
+  const rib = 14 * k;
+  let details =
+    `M${Lf({ x: neckW / 2 + rib * 0.6, y: 0 })} C${Lf({ x: neckW / 2 + rib * 0.6, y: neckD * 0.85 + rib })} ${Lf({ x: neckW * 0.22, y: neckD + rib })} ${R({ x: 0, y: neckD + rib })}` +
+    ` C${R({ x: neckW * 0.22, y: neckD + rib })} ${R({ x: neckW / 2 + rib * 0.6, y: neckD * 0.85 + rib })} ${R({ x: neckW / 2 + rib * 0.6, y: 0 })}` +
+    ` M${Lf({ x: shoulderX, y: slope })} L${Lf(arm)} M${R({ x: shoulderX, y: slope })} L${R(arm)}`;
+  if (shape === 'sweat') {
+    const hem = 60 * k;
+    details += ` M${Lf({ x: W / 2, y: L - hem })} L${R({ x: W / 2, y: L - hem })}`;
+    const cuff = 70 * k;
+    const c = (p: { x: number; y: number }, d: number) => ({ x: p.x - d * Math.cos(a), y: p.y - d * Math.sin(a) });
+    details += ` M${Lf(c(outer, cuff))} L${Lf(c(inner, cuff))} M${R(c(outer, cuff))} L${R(c(inner, cuff))}`;
+  } else {
+    details += ` M${Lf({ x: W / 2, y: L - 22 * k })} L${R({ x: W / 2, y: L - 22 * k })}`;
+  }
   return {
-    w: w + 40,
-    h: top + h + 20,
-    back: `M${20 + hl - 15} ${top + 5} C${20 + hl - 15} ${top - hh} ${20 + hr + 15} ${top - hh} ${20 + hr + 15} ${top + 5} L${20 + hr - 10} ${top + 5} C${20 + hr - 10} ${top - hh + 28} ${20 + hl + 10} ${top - hh + 28} ${20 + hl + 10} ${top + 5} Z`,
-    body: `M20 ${top} H${20 + w} V${top + h} H20 Z`,
-    details: `M20 ${top + 18} H${20 + w}`,
-    print: { y: top + printTop },
+    w: 2 * half + 2 * M,
+    h: L + 2 * M,
+    body,
+    details,
+    px: cx - s.w / 2,
+    py: y0 + neckD + s.top,
   };
 }
 
-const SHAPES: Record<string, Shape> = {
-  tshirt: TSHIRT,
-  'tshirt-chest': { ...TSHIRT, print: { x: 395, y: 125 } },
-  sweat: SWEAT,
-  tote: tote(410, 390, 190, 45),
-  'mini-tote': tote(350, 215, 150, 32),
-};
+function bagOutline(shape: Shape, s: SizeSpec): Outline {
+  const { width: W, length: H } = s.garment;
+  const handleH = shape === 'tote' ? 230 : 160;
+  const top = M + handleH;
+  const x0 = M;
+  const hl = x0 + W * 0.27;
+  const hr = x0 + W * 0.73;
+  const strap = shape === 'tote' ? 25 : 20;
+  return {
+    w: W + 2 * M,
+    h: top + H + M,
+    back: `M${hl - strap / 2} ${top + 5} C${hl - strap / 2} ${top - handleH * 1.2} ${hr + strap / 2} ${top - handleH * 1.2} ${hr + strap / 2} ${top + 5} L${hr - strap / 2} ${top + 5} C${hr - strap / 2} ${top - handleH * 1.05} ${hl + strap / 2} ${top - handleH * 1.05} ${hl + strap / 2} ${top + 5} Z`,
+    body: `M${x0} ${top} H${x0 + W} V${top + H} H${x0} Z`,
+    details: `M${x0} ${top + 18} H${x0 + W}`,
+    px: x0 + (W - s.w) / 2,
+    py: top + s.top,
+  };
+}
 
 export function Mockup() {
   const project = useStore((s) => s.project);
   const uiLang = useStore((s) => s.uiLang);
   const c = compose(project, uiLang);
   const product = productById(project.productId);
-  const color = GARMENT_COLORS.find((g) => g.id === project.garment)?.hex ?? '#fff';
-  const shape = SHAPES[product.mockup];
-  const dark = ['navy', 'black'].includes(project.garment);
+  const size = sizeOf(project.productId, project.sizeId);
+  const color = garmentColor(project.garment);
 
   const design = (
     <>
       {c.placed.map((p) => (
-        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} />
+        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} theme={project.theme} />
       ))}
       {c.credit.map((p, i) => (
         <PrimEl key={i} p={p} />
@@ -75,11 +126,11 @@ export function Mockup() {
     </>
   );
 
-  if (!shape) {
+  if (product.shape === 'none') {
     return (
       <div className="canvas-wrap">
         <svg className="canvas" viewBox={`${-20} ${-20} ${c.w + 40} ${c.h + 40}`}>
-          <rect width={c.w} height={c.h} fill={color} />
+          <rect width={c.w} height={c.h} fill={color.hex} />
           <svg width={c.w} height={c.h} viewBox={`0 0 ${c.w} ${c.h}`} overflow="hidden">
             {design}
           </svg>
@@ -88,12 +139,11 @@ export function Mockup() {
     );
   }
 
-  const px = shape.print.x ?? (shape.w - c.w) / 2;
-  const py = shape.print.y;
-  const stroke = dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.16)';
+  const o = product.shape === 'tote' || product.shape === 'mini-tote' ? bagOutline(product.shape, size) : topOutline(product.shape, size);
+  const stroke = color.dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)';
   return (
     <div className="canvas-wrap">
-      <svg className="canvas mockup" viewBox={`0 0 ${shape.w} ${shape.h}`}>
+      <svg className="canvas mockup" viewBox={`0 0 ${o.w} ${o.h}`}>
         <defs>
           <linearGradient id="fabric" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#fff" stopOpacity="0.10" />
@@ -104,14 +154,14 @@ export function Mockup() {
             <rect width={c.w} height={c.h} />
           </clipPath>
         </defs>
-        {shape.back && <path d={shape.back} fill={color} stroke={stroke} strokeWidth={1.5} />}
-        <path d={shape.body} fill={color} stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
-        <path d={shape.details} fill="none" stroke={stroke} strokeWidth={1.2} />
-        <g transform={`translate(${px} ${py})`} clipPath="url(#printClip)">
+        {o.back && <path d={o.back} fill={color.hex} stroke={stroke} strokeWidth={1.5} />}
+        <path d={o.body} fill={color.hex} stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+        <path d={o.details} fill="none" stroke={stroke} strokeWidth={1.2} />
+        <g transform={`translate(${o.px} ${o.py})`} clipPath="url(#printClip)">
           {design}
         </g>
-        <path d={shape.body} fill="url(#fabric)" pointerEvents="none" />
-        <rect x={px} y={py} width={c.w} height={c.h} fill="none" stroke={dark ? '#fff' : '#36c'} strokeOpacity={0.35} strokeDasharray="4 3" strokeWidth={0.8} />
+        <path d={o.body} fill="url(#fabric)" pointerEvents="none" />
+        <rect x={o.px} y={o.py} width={c.w} height={c.h} fill="none" stroke={color.dark ? '#fff' : '#36c'} strokeOpacity={0.35} strokeDasharray="4 3" strokeWidth={0.8} />
       </svg>
     </div>
   );

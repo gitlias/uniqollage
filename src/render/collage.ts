@@ -2,7 +2,7 @@ import type { Project, Tile } from '../model';
 import { printArea } from '../products';
 import { layoutText } from '../text/layout';
 import { parseMarkup } from '../text/markup';
-import { renderTile, type Prim } from './tiles';
+import { PALETTES, renderTile, type Prim } from './tiles';
 import type { Box } from '../layout/pack';
 
 export function creditSize(area: { w: number }): number {
@@ -11,7 +11,7 @@ export function creditSize(area: { w: number }): number {
 
 /** Area available to tiles (print area minus the optional credit strip). */
 export function contentBox(p: Project): Box {
-  const area = printArea(p.productId, p.customArea);
+  const area = printArea(p.productId, p.customArea, p.sizeId);
   const strip = p.credit ? creditSize(area) * 2.2 : 0;
   return { x: 0, y: 0, w: area.w, h: area.h - strip };
 }
@@ -60,9 +60,10 @@ export interface Composition {
 }
 
 export function compose(p: Project, lang: 'en' | 'de'): Composition {
-  const area = printArea(p.productId, p.customArea);
+  const area = printArea(p.productId, p.customArea, p.sizeId);
+  const muted = PALETTES[p.theme].muted;
   const placed = p.tiles.map((tile) => {
-    const r = renderTile(tile, p.baseSize);
+    const r = renderTile(tile, p.baseSize, p.theme);
     return { tile, h: r.h, prims: r.prims };
   });
   const credit: Prim[] = [];
@@ -70,10 +71,10 @@ export function compose(p: Project, lang: 'en' | 'de'): Composition {
     const text = creditText(p, lang);
     if (text) {
       const size = creditSize(area);
-      const block = layoutText(parseMarkup(text), area.w, { size, lineHeight: 1.3, color: '#54595d', align: 'center' });
+      const block = layoutText(parseMarkup(text), area.w, { size, lineHeight: 1.3, color: muted, align: 'center' });
       // Shrink to a single line if needed.
       const scale = block.lines > 1 ? Math.max(0.55, area.w / (block.maxLineWidth * 1.02 + 1)) : 1;
-      const final = scale < 1 ? layoutText(parseMarkup(text), area.w, { size: size * scale, lineHeight: 1.3, color: '#54595d', align: 'center' }) : block;
+      const final = scale < 1 ? layoutText(parseMarkup(text), area.w, { size: size * scale, lineHeight: 1.3, color: muted, align: 'center' }) : block;
       const y = area.h - final.height;
       for (const pth of final.paths) credit.push({ t: 'path', d: pth.d, fill: pth.fill, x: 0, y });
     }

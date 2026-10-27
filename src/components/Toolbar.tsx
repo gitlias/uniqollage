@@ -1,7 +1,6 @@
 import { useStore, updateAndRelayout } from '../store';
-import { useUi } from '../ui';
 import { useT } from '../i18n';
-import { GARMENT_COLORS, PRODUCTS } from '../products';
+import { garmentColor, productById, PRODUCTS } from '../products';
 
 export function Toolbar() {
   const t = useT();
@@ -10,8 +9,8 @@ export function Toolbar() {
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const autoLayout = useStore((s) => s.autoLayout);
-  const view = useUi((s) => s.view);
   const s = useStore.getState();
+  const product = productById(p.productId);
 
   const setSize = (baseSize: number) => {
     if (autoLayout) updateAndRelayout((x) => ({ ...x, baseSize, autoSize: false }));
@@ -23,15 +22,40 @@ export function Toolbar() {
       <div className="group">
         <label>
           {t('product')}
-          <select value={p.productId} onChange={(e) => updateAndRelayout((x) => ({ ...x, productId: e.target.value }))}>
+          <select
+            value={product.id}
+            onChange={(e) => {
+              const next = productById(e.target.value);
+              updateAndRelayout((x) => {
+                const garment = next.colors.includes(x.garment) ? x.garment : next.colors[0];
+                return { ...x, productId: next.id, sizeId: next.defaultSize, garment, theme: garmentColor(garment).dark ? 'dark' : 'light' };
+              });
+            }}
+          >
             {PRODUCTS.map((pr) => (
               <option key={pr.id} value={pr.id}>
                 {pr.name[uiLang]}
-                {pr.id !== 'custom' ? ` · ${pr.w / 10}×${pr.h / 10} cm` : ''}
               </option>
             ))}
           </select>
         </label>
+        {product.sizes.length > 1 && (
+          <label>
+            {t('size')}
+            <select value={p.sizeId} onChange={(e) => updateAndRelayout((x) => ({ ...x, sizeId: e.target.value }))}>
+              {product.sizes.map((sz) => (
+                <option key={sz.id} value={sz.id}>
+                  {sz.id} · {sz.w / 10}×{sz.h / 10} cm
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {product.sizes.length === 1 && product.id !== 'custom' && (
+          <span className="muted small">
+            {product.sizes[0].w / 10}×{product.sizes[0].h / 10} cm
+          </span>
+        )}
         {p.productId === 'custom' && (
           <>
             <label>
@@ -86,22 +110,27 @@ export function Toolbar() {
           ↷
         </button>
       </div>
-      {view === 'mockup' && (
-        <div className="group">
-          <span className="muted">{t('garment')}</span>
-          <div className="swatches">
-            {GARMENT_COLORS.map((g) => (
+      <div className="group">
+        <span className="muted">{t('garment')}</span>
+        <div className="swatches">
+          {product.colors.map((id) => {
+            const g = garmentColor(id);
+            return (
               <button
-                key={g.id}
-                className={`swatch ${p.garment === g.id ? 'on' : ''}`}
+                key={id}
+                className={`swatch ${p.garment === id ? 'on' : ''}`}
                 style={{ background: g.hex }}
                 title={g.name[uiLang]}
-                onClick={() => s.update((x) => ({ ...x, garment: g.id }), false)}
+                onClick={() => s.update((x) => ({ ...x, garment: id, theme: g.dark ? 'dark' : 'light' }))}
               />
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
+        <label className="check" title={t('nightModeHint')}>
+          <input type="checkbox" checked={p.theme === 'dark'} onChange={(e) => s.update((x) => ({ ...x, theme: e.target.checked ? 'dark' : 'light' }))} />{' '}
+          {t('nightMode')}
+        </label>
+      </div>
     </div>
   );
 }

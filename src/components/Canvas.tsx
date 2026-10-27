@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../store';
 import { compose } from '../render/collage';
 import { PrimEl, TileView } from './TileView';
+import { garmentColor } from '../products';
 import { useT } from '../i18n';
 
 type Gesture =
@@ -122,7 +123,7 @@ export function Canvas() {
             <feDropShadow dx="0" dy={pad * 0.05} stdDeviation={pad * 0.12} floodOpacity="0.18" />
           </filter>
         </defs>
-        <rect x={0} y={0} width={c.w} height={c.h} fill="#fff" filter="url(#pageShadow)" />
+        <rect x={0} y={0} width={c.w} height={c.h} fill={garmentColor(project.garment).hex} filter="url(#pageShadow)" />
         {c.placed.map((p) => (
           <g
             key={p.tile.id}
@@ -133,7 +134,7 @@ export function Canvas() {
               start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y });
             }}
           >
-            <TileView tile={p.tile} baseSize={project.baseSize} />
+            <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} />
             <rect
               transform={`translate(${p.tile.x} ${p.tile.y}) rotate(${p.tile.rot} ${p.tile.w / 2} ${p.h / 2})`}
               width={p.tile.w}

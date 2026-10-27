@@ -112,25 +112,36 @@ await step('undo/redo', async () => {
 await step('mockups', async () => {
   await page.click('.page-tabs button >> text=Preview on product');
   await page.screenshot({ path: `${out}/mockup-tshirt.png` });
-  await page.selectOption('.toolbar select', 'tote');
-  await page.click('.swatch[title=Natural]');
+  await page.selectOption('.toolbar select >> nth=0', 'sweat');
+  await page.selectOption('.toolbar select >> nth=1', 'L');
+  await page.click('.swatch[title=Black]');
+  if (!(await page.isChecked('.toolbar input[type=checkbox] >> nth=-1'))) throw new Error('night mode not enabled for black');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/mockup-sweat-black.png` });
+  await page.selectOption('.toolbar select >> nth=0', 'tote');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-tote.png` });
-  await page.click('.swatch[title=Navy]');
-  await page.selectOption('.toolbar select', 'mini-tote');
+  await page.selectOption('.toolbar select >> nth=0', 'mini-tote');
   await page.screenshot({ path: `${out}/mockup-mini.png` });
-  await page.selectOption('.toolbar select', 'tshirt');
+  await page.selectOption('.toolbar select >> nth=0', 'airism-oversized');
+  await page.screenshot({ path: `${out}/mockup-oversized.png` });
+  await page.selectOption('.toolbar select >> nth=0', 'basic-t');
+  await page.click('.swatch[title=Black]');
   await page.click('.page-tabs button >> text=Edit');
+  await page.screenshot({ path: `${out}/editor-dark.png` });
+  await page.click('.swatch[title=White]');
 });
 
 await step('exports', async () => {
   await page.click('header button.primary');
-  for (const [label, file] of [
+  for (const [label, file, target] of [
     ['⬇ PNG', 'collage.png'],
+    ['⬇ PNG', 'collage-intl.png', 'utme-intl'],
     ['SVG (vector)', 'collage.svg'],
     ['PDF (vector)', 'collage.pdf'],
     ['Attribution list', 'sources.txt'],
   ]) {
+    if (target) await page.selectOption('.modal select', target);
     const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click(`.modal button >> text=${label}`)]);
     await dl.saveAs(`${out}/${file}`);
     console.log(`\n   ${file}: ${dl.suggestedFilename()} ${statSync(`${out}/${file}`).size} bytes`);

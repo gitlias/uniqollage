@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { Tile } from '../model';
+import type { Theme, Tile } from '../model';
 import { renderTile, type Prim } from '../render/tiles';
 import { r3, tileTransform } from '../render/collage';
 
@@ -16,8 +16,8 @@ export function PrimEl({ p }: { p: Prim }) {
   }
 }
 
-export const TileView = memo(function TileView({ tile, baseSize }: { tile: Tile; baseSize: number }) {
-  const r = renderTile(tile, baseSize);
+export const TileView = memo(function TileView({ tile, baseSize, theme }: { tile: Tile; baseSize: number; theme: Theme }) {
+  const r = renderTile(tile, baseSize, theme);
   return (
     <g transform={tileTransform(tile, r.h)}>
       {r.prims.map((p, i) => (

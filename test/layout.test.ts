@@ -83,3 +83,11 @@ describe('font outlines', () => {
     }
   });
 });
+
+describe('night mode', () => {
+  it('renders text and links in the dark palette', () => {
+    const t = sample(2)[1];
+    const fills = renderTile(t, 3, 'dark').prims.filter((p) => p.t === 'path').map((p) => (p as { fill: string }).fill);
+    expect(new Set(fills)).toEqual(new Set(['#eaecf0', '#88a3e8']));
+  });
+});

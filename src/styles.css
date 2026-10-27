@@ -834,3 +834,16 @@ button.add {
     height: 85vh;
   }
 }
+
+/* Codex message */
+.msg {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-size: 13px;
+}
+.msg.warning {
+  background: #fdf2d5;
+  border-color: #ac6600;
+}

@@ -76,9 +76,15 @@ export type TileType = Tile['type'];
 export type TileDraft = DistributiveOmit<Tile, keyof Placement | 'id' | 'scale'> & { scale?: number };
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+export type Theme = 'light' | 'dark';
+
 export interface Project {
   version: 1;
   productId: string;
+  /** Garment size (print areas differ per size). */
+  sizeId: string;
+  /** 'dark' = Wikipedia night mode palette, for black garments. */
+  theme: Theme;
   /** Only used when productId === 'custom'. */
   customArea: { w: number; h: number };
   /** Body text size in mm (cap height ≈ 0.7×). */

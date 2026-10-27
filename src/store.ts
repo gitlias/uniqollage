@@ -2,12 +2,14 @@ import { create } from 'zustand';
 import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
 import { arrange, shuffled } from './layout/pack';
 import { contentBox } from './render/collage';
-import { printArea } from './products';
+import { printArea, productById, sizeOf } from './products';
 
 export function emptyProject(): Project {
   return {
     version: 1,
-    productId: 'tshirt',
+    productId: 'basic-t',
+    sizeId: 'M',
+    theme: 'light',
     customArea: { w: 250, h: 320 },
     baseSize: 3,
     autoSize: true,
@@ -19,6 +21,19 @@ export function emptyProject(): Project {
 }
 
 const HISTORY = 100;
+
+/** Fill in fields added after a project was saved and map legacy product ids. */
+export function migrate(p: Project): Project {
+  const product = productById(p.productId);
+  return {
+    ...emptyProject(),
+    ...p,
+    productId: product.id,
+    sizeId: sizeOf(product.id, p.sizeId).id,
+    theme: p.theme ?? 'light',
+    garment: product.colors.includes(p.garment) ? p.garment : product.colors[0],
+  };
+}
 
 interface State {
   project: Project;
@@ -88,7 +103,7 @@ export const useStore = create<State>((set, get) => ({
   },
   addTiles(drafts) {
     const { project, autoLayout } = get();
-    const area = printArea(project.productId, project.customArea);
+    const area = printArea(project.productId, project.customArea, project.sizeId);
     const tiles: Tile[] = drafts.map(
       (d, i) =>
         ({
@@ -146,7 +161,7 @@ export const useStore = create<State>((set, get) => ({
     set({ uiLang: l });
   },
   load(p) {
-    set({ project: p, past: [], future: [], selected: null, autoLayout: false });
+    set({ project: migrate(p), past: [], future: [], selected: null, autoLayout: false });
   },
 }));
 
