@@ -117,7 +117,7 @@ function ArticleView({ article: a, onBack, loading }: { article: Article; onBack
       image: { src, aspect },
       caption: f.caption,
       frame: true,
-      source: { kind: 'wikipedia', lang: a.lang, title: f.file, url: info?.page, license: info?.license, artist: info?.artist },
+      source: { kind: 'wikipedia', lang: a.lang, title: f.file, article: a.title, url: info?.page, license: info?.license, artist: info?.artist },
     };
   };
 

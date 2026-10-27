@@ -84,7 +84,7 @@ export function articlePage(a: PageArticle, area: Box, opts: { baseSize: number;
         image,
         caption: f.caption,
         frame: true,
-        source: { kind: 'wikipedia', lang: a.lang, title: f.file, url: info?.page, license: info?.license, artist: info?.artist },
+        source: { kind: 'wikipedia', lang: a.lang, title: f.file, article: a.title, url: info?.page, license: info?.license, artist: info?.artist },
         x: 0,
         y: 0,
         w: floatW,

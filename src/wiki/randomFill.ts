@@ -91,7 +91,7 @@ function randomMonth(lang: Lang, rand: () => number): { year: number; month: num
 
 async function imageDraft(fig: Figure, info: ImageInfo | undefined, article: { lang: Lang; title: string }): Promise<TileDraft> {
   const caption = fig.caption || `[[${escapeText(article.title)}]]`;
-  const source: Source = { kind: 'wikipedia', lang: article.lang, title: fig.file, url: info?.page, license: info?.license, artist: info?.artist };
+  const source: Source = { kind: 'wikipedia', lang: article.lang, title: fig.file, article: article.title, url: info?.page, license: info?.license, artist: info?.artist };
   return {
     type: 'image',
     image: { src: info?.url ?? fig.thumb, aspect: info ? info.width / info.height : await measureAspect(fig.thumb) },

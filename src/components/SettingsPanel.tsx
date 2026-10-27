@@ -6,6 +6,7 @@ import { useT } from '../i18n';
 import type { Skin } from '../model';
 import { areaOf, garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
 import { autoGap } from '../layout/pack';
+import { ARRANGEMENTS, DEFAULT_OPTIMIZE, EFFORTS, type Optimize } from '../layout/arrange';
 
 const SKINS: Skin[] = ['vector2010', 'vector2022', 'monobook', 'minerva'];
 
@@ -25,6 +26,11 @@ export function SettingsPanel() {
   const area = areaOf(p);
   const maxMargin = Math.floor(Math.min(area.w, area.h) / 4);
   const gap = p.gap ?? autoGap(p.baseSize);
+  const arrangement = p.arrangement ?? 'columns';
+  // Rows and mosaic have no holes to close.
+  const hasNeat = arrangement === 'columns' || arrangement === 'masonry';
+  const opt = { ...DEFAULT_OPTIMIZE, ...p.optimize };
+  const setOpt = (patch: Partial<Optimize>, explicit = true) => updateAndRelayout((x) => ({ ...x, optimize: { ...x.optimize, ...patch } }), explicit);
 
   // Close on Escape or a click outside (but not on the ⚙ button, which toggles).
   useEffect(() => {
@@ -178,6 +184,22 @@ export function SettingsPanel() {
 
       <section>
         <h4>{t('settingsLayout')}</h4>
+        <div className="field" title={t(`arrangementHint_${arrangement}`)}>
+          <span>{t('arrangement')}</span>
+          <div className="seg wrap" role="group">
+            {ARRANGEMENTS.map((a) => (
+              <button
+                key={a}
+                className={arrangement === a ? 'on' : ''}
+                title={t(`arrangementHint_${a}`)}
+                onClick={() => updateAndRelayout((x) => ({ ...x, arrangement: a }), true)}
+              >
+                {t(`arrangement_${a}`)}
+              </button>
+            ))}
+          </div>
+          <span className="muted small">{t(`arrangementHint_${arrangement}`)}</span>
+        </div>
         <label>
           <span className="row spread">
             {t('textSize')}
@@ -205,14 +227,16 @@ export function SettingsPanel() {
           </span>
           <input type="range" min={0} max={maxMargin} step={1} value={p.margins ?? 0} onChange={(e) => updateAndRelayout((x) => ({ ...x, margins: Number(e.target.value) }))} />
         </label>
-        <label title={t('neatHint')}>
-          <span className="row spread">
-            {t('neat')}
-            <span className="muted small">{Math.round((p.neat ?? 0) * 100)} %</span>
-          </span>
-          <input type="range" min={0} max={1} step={0.05} value={p.neat ?? 0} onChange={(e) => updateAndRelayout((x) => ({ ...x, neat: Number(e.target.value) }))} />
-        </label>
-        {(p.neat ?? 0) > 0 && (
+        {hasNeat && (
+          <label title={t('neatHint')}>
+            <span className="row spread">
+              {t('neat')}
+              <span className="muted small">{Math.round((p.neat ?? 0) * 100)} %</span>
+            </span>
+            <input type="range" min={0} max={1} step={0.05} value={p.neat ?? 0} onChange={(e) => updateAndRelayout((x) => ({ ...x, neat: Number(e.target.value) }))} />
+          </label>
+        )}
+        {hasNeat && (p.neat ?? 0) > 0 && (
           <div className="field">
             <span className="muted small">
               {t('reserve')}: {p.reserve?.length ?? 0} {t('sentences')}
@@ -230,6 +254,36 @@ export function SettingsPanel() {
         <label className="check">
           <input type="checkbox" checked={p.credit} onChange={(e) => updateAndRelayout((x) => ({ ...x, credit: e.target.checked }))} /> {t('credit')}
         </label>
+      </section>
+
+      <section>
+        <h4>{t('settingsOptimize')}</h4>
+        <div className="field" title={t('effortHint')}>
+          <span>{t('effort')}</span>
+          <div className="seg" role="group">
+            {EFFORTS.map((e) => (
+              <button key={e} className={opt.effort === e ? 'on' : ''} onClick={() => setOpt({ effort: e })}>
+                {t(`effort_${e}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="check" title={t('groupHint')}>
+          <input type="checkbox" checked={opt.group} onChange={(e) => setOpt({ group: e.target.checked })} /> {t('group')}
+        </label>
+        <label className="check" title={t('spreadImagesHint')}>
+          <input type="checkbox" checked={opt.spreadImages} onChange={(e) => setOpt({ spreadImages: e.target.checked })} /> {t('spreadImages')}
+        </label>
+        {arrangement === 'mosaic' && (
+          <label title={t('sizeRangeHint')}>
+            <span className="row spread">
+              {t('sizeRange')}
+              <span className="muted small">≤ {opt.sizeRange.toFixed(1)}×</span>
+            </span>
+            <input type="range" min={1} max={3} step={0.1} value={opt.sizeRange} onChange={(e) => setOpt({ sizeRange: Number(e.target.value) }, false)} />
+          </label>
+        )}
+        <p className="muted small">{t('effortHint')}</p>
       </section>
 
       <section>

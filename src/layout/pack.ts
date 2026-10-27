@@ -2,6 +2,7 @@ import { newId, type ReserveItem, type Skin, type Tile } from '../model';
 import { imageBoxWidth, tileHeight } from '../render/tiles';
 import { stripMarkup } from '../text/markup';
 import { font } from '../text/fonts';
+import { maxWhere } from './measure';
 
 // Auto layout: a seeded masonry/skyline packer. Tiles span 1..n columns; each
 // is dropped where the skyline is lowest. With autoSize, the body text size is
@@ -162,19 +163,34 @@ function fillHoles(res: Attempt, bottom: number, b: number, skin: Skin, maxGrow 
   }
 }
 
-/** Largest value in [lo, hi] for which `ok` holds (ok is monotone: true then false). */
-function maxWhere(lo: number, hi: number, ok: (v: number) => boolean, steps = 10): number | null {
-  if (!ok(lo)) return null;
-  if (ok(hi)) return hi;
-  for (let i = 0; i < steps; i++) {
-    const mid = (lo + hi) / 2;
-    if (ok(mid)) lo = mid;
-    else hi = mid;
-  }
-  return lo;
-}
-
 const FILLER_SCALE = [0.5, 0.85] as const;
+
+/**
+ * Pick the spare sentence (from a random sample of `pool`) that fills a
+ * `w`×`avail` hole best at filler size, and remove it from the pool.
+ */
+export function takeFiller(
+  pool: ReserveItem[],
+  w: number,
+  avail: number,
+  height: (t: Tile) => number,
+  r: () => number,
+): { tile: Tile; h: number } | null {
+  let best: { i: number; scale: number; h: number } | null = null;
+  const start = Math.floor(r() * pool.length);
+  for (let k = 0; k < Math.min(pool.length, 40); k++) {
+    const i = (start + k) % pool.length;
+    const base = { id: '', type: 'text', markup: pool[i].markup, source: pool[i].source, x: 0, y: 0, w, rot: 0, scale: 1 } as Tile;
+    const sc = maxWhere(FILLER_SCALE[0], FILLER_SCALE[1], (v) => height({ ...base, scale: v } as Tile) <= avail, 7);
+    if (sc === null) continue;
+    const h = height({ ...base, scale: sc } as Tile);
+    if (!best || h > best.h) best = { i, scale: sc, h };
+    if (h > avail * 0.9) break;
+  }
+  if (!best) return null;
+  const item = pool.splice(best.i, 1)[0];
+  return { tile: { id: newId(), type: 'text', markup: item.markup, source: item.source, filler: true, x: 0, y: 0, w, rot: 0, scale: best.scale }, h: best.h };
+}
 
 /**
  * "Neat" pass: tiles grow into the free space below them (images crop
@@ -229,34 +245,10 @@ function neaten(res: Attempt, area: Box, b: number, skin: Skin, neat: number, re
     const w = (hole.c1 - hole.c0 + 1) * res.colW + (hole.c1 - hole.c0) * res.gap;
     let y = hole.top;
     while (hole.bottom - y >= minHole && pool.length) {
-      const avail = hole.bottom - y;
-      let best: { i: number; scale: number; h: number } | null = null;
-      // Try a random sample of spare sentences; keep the one that fills the space best.
-      const start = Math.floor(r() * pool.length);
-      for (let k = 0; k < Math.min(pool.length, 40); k++) {
-        const i = (start + k) % pool.length;
-        const base = { id: '', type: 'text', markup: pool[i].markup, source: pool[i].source, x: 0, y: 0, w, rot: 0, scale: 1 } as Tile;
-        const sc = maxWhere(FILLER_SCALE[0], FILLER_SCALE[1], (v) => height({ ...base, scale: v } as Tile) <= avail, 7);
-        if (sc === null) continue;
-        const h = height({ ...base, scale: sc } as Tile);
-        if (!best || h > best.h) best = { i, scale: sc, h };
-        if (h > avail * 0.9) break;
-      }
-      if (!best) break;
-      const item = pool.splice(best.i, 1)[0];
-      fillers.push({
-        id: newId(),
-        type: 'text',
-        markup: item.markup,
-        source: item.source,
-        filler: true,
-        x: area.x + hole.c0 * (res.colW + res.gap),
-        y: area.y + y,
-        w,
-        rot: 0,
-        scale: best.scale,
-      });
-      y += best.h + res.gap;
+      const f = takeFiller(pool, w, hole.bottom - y, height, r);
+      if (!f) break;
+      fillers.push({ ...f.tile, x: area.x + hole.c0 * (res.colW + res.gap), y: area.y + y });
+      y += f.h + res.gap;
     }
   }
   return fillers;
@@ -266,6 +258,15 @@ export interface ArrangeResult {
   tiles: Tile[];
   baseSize: number;
   overflow: boolean;
+  /** Layout flaws (holes along the edges, crops, uneven sizes…); 0 = clean. Used to compare candidates. */
+  badness: number;
+}
+
+/** Remove what an earlier arrange added (fillers, growth, crops) so arranging again does not accumulate it. */
+export function cleanTiles(tiles: Tile[]): Tile[] {
+  return tiles
+    .filter((t) => !(t.type === 'text' && t.filler))
+    .map((t) => (t.grow || (t.type === 'image' && t.boxAspect) ? ({ ...t, grow: undefined, ...(t.type === 'image' ? { boxAspect: undefined } : {}) } as Tile) : t));
 }
 
 const VARIANTS = 10;
@@ -313,15 +314,15 @@ export function arrange(
     /** 0–1, see `neaten`. */
     neat?: number;
     reserve?: ReserveItem[];
+    /** Number of random span/tie variants to try (default 10). */
+    variants?: number;
   },
 ): ArrangeResult {
   const skin = opts.skin ?? 'vector2010';
   const neat = opts.neat ?? 0;
-  // Fillers are regenerated; earlier crops and growth are undone so repeated arranging does not accumulate them.
-  const clean = tiles
-    .filter((t) => !(t.type === 'text' && t.filler))
-    .map((t) => (t.grow || (t.type === 'image' && t.boxAspect) ? ({ ...t, grow: undefined, ...(t.type === 'image' ? { boxAspect: undefined } : {}) } as Tile) : t));
-  if (!clean.length) return { tiles: clean, baseSize: opts.baseSize, overflow: false };
+  const variants = opts.variants ?? VARIANTS;
+  const clean = cleanTiles(tiles);
+  if (!clean.length) return { tiles: clean, baseSize: opts.baseSize, overflow: false, badness: 0 };
   let b = opts.baseSize;
   let res: Attempt | null = null;
   // Several span/order variants; prefer large text, but strongly avoid holes
@@ -329,7 +330,7 @@ export function arrange(
   const score = (size: number, a: Attempt) => size * (1 - 2 * raggedness(a));
   if (opts.autoSize) {
     let best: { b: number; res: Attempt; score: number } | null = null;
-    for (let v = 0; v < VARIANTS; v++) {
+    for (let v = 0; v < variants; v++) {
       const f = fit(clean, area, opts.seed + v * 7919, skin, opts.gap);
       if (!f) continue;
       const sc = score(f.b, f.res);
@@ -341,7 +342,7 @@ export function arrange(
     } else b = 0.6;
   } else {
     let best: { res: Attempt; r: number } | null = null;
-    for (let v = 0; v < VARIANTS; v++) {
+    for (let v = 0; v < variants; v++) {
       const a = attempt(clean, area, b, opts.seed + v * 7919, skin, opts.gap);
       if (a.height > area.h + 1e-6) continue;
       const r = raggedness(a);
@@ -352,13 +353,15 @@ export function arrange(
   }
   res ??= attempt(clean, area, b, opts.seed, skin, opts.gap);
   const overflow = res.height > area.h + 1e-6;
+  const badness = -Math.log(Math.max(0.05, 1 - 2 * raggedness(res)));
   // Heights at the (rounded) size that is returned and rendered.
-  const bOut = Math.round(b * 1000) / 1000;
+  // Rounded down: slightly smaller text never makes a column taller than planned.
+  const bOut = Math.floor(b * 1000) / 1000;
   const height = (t: Tile) => tileHeight(t, t.w, bOut, skin);
   if (neat > 0 && !overflow) {
     const fillers = neaten(res, area, b, skin, neat, opts.reserve ?? [], opts.seed);
     const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y }));
-    return { tiles: flushBottom([...out, ...fillers], area, height), baseSize: bOut, overflow };
+    return { tiles: flushBottom([...out, ...fillers], area, height), baseSize: bOut, overflow, badness };
   }
   fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
@@ -366,7 +369,7 @@ export function arrange(
   // With a fixed spacing the gaps must stay exactly as set, so don't spread.
   const k = opts.gap === undefined && res.height > 0 && res.height < area.h ? area.h / res.height : 1;
   const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y * k }));
-  return { tiles: overflow ? out : flushBottom(out, area, height), baseSize: bOut, overflow };
+  return { tiles: overflow ? out : flushBottom(out, area, height), baseSize: bOut, overflow, badness };
 }
 
 /**

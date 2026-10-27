@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { isNonStandardThumb, originalFromThumb } from './wiki/api';
 import { newId, type Lang, type Project, type ReserveItem, type Tile, type TileDraft } from './model';
-import { arrange, shuffled } from './layout/pack';
+import { shuffled } from './layout/pack';
+import { arrangeTiles } from './layout/arrange';
 import { contentBox } from './render/collage';
 import { areaOf, garmentColor, offerIn, productById, productsIn } from './products';
 
@@ -111,10 +112,26 @@ function toTiles(project: Project, drafts: TileDraft[]): Tile[] {
   );
 }
 
-function relayout(p: Project, shuffle: boolean): Project {
+/**
+ * Re-run the auto layout. Only explicit Shuffle / Re-arrange use the
+ * "thorough" search; layouts triggered while editing settings stay quick.
+ */
+function relayout(p: Project, shuffle: boolean, explicit = false): Project {
   const seed = shuffle ? Math.floor(Math.random() * 2 ** 31) : p.seed;
   const order = shuffle ? shuffled(p.tiles, seed) : p.tiles;
-  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin, gap: p.gap, neat: p.neat, reserve: p.reserve });
+  const optimize = { ...p.optimize };
+  if (!explicit && optimize.effort === 'thorough') optimize.effort = 'normal';
+  const res = arrangeTiles(order, contentBox(p), {
+    arrangement: p.arrangement,
+    baseSize: p.baseSize,
+    autoSize: p.autoSize,
+    seed,
+    skin: p.skin,
+    gap: p.gap,
+    neat: p.neat,
+    reserve: p.reserve,
+    optimize,
+  });
   return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
 }
 
@@ -176,7 +193,7 @@ export const useStore = create<State>((set, get) => ({
     set({ autoLayout: false, selected: null });
   },
   fill(drafts, replace) {
-    get().update((p) => relayout({ ...p, tiles: [...(replace ? [] : p.tiles), ...toTiles(p, drafts)] }, true));
+    get().update((p) => relayout({ ...p, tiles: [...(replace ? [] : p.tiles), ...toTiles(p, drafts)] }, true, true));
     set({ autoLayout: true, selected: null });
   },
   patchTile(id, patch, history = true) {
@@ -211,7 +228,7 @@ export const useStore = create<State>((set, get) => ({
     if (autoLayout && project.tiles.length) set({ project: relayout(project, false) });
   },
   arrange(shuffle) {
-    get().update((p) => relayout(p, shuffle));
+    get().update((p) => relayout(p, shuffle, true));
     set({ autoLayout: true });
   },
   select(id) {
@@ -230,12 +247,15 @@ export const useStore = create<State>((set, get) => ({
   },
 }));
 
-/** Re-run the layout after a setting change that affects it (product, size, credit strip). */
-export function updateAndRelayout(fn: (p: Project) => Project): void {
+/**
+ * Re-run the layout after a setting change that affects it (product, size, credit strip).
+ * `explicit` for one-off choices (not slider drags), so a "thorough" search may run.
+ */
+export function updateAndRelayout(fn: (p: Project) => Project, explicit = false): void {
   const s = useStore.getState();
   s.update((p) => {
     const next = fn(p);
-    return next.tiles.length ? relayout(next, false) : next;
+    return next.tiles.length ? relayout(next, false, explicit) : next;
   });
   useStore.setState({ autoLayout: true });
 }

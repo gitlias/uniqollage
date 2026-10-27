@@ -36,8 +36,14 @@ files.
   with "…" where the canvas ends.
 - **Random fill** with any mix of content types, 5–50 tiles, EN/DE, and an
   optional Wikipedia category (incl. subcategories).
-- **Auto layout + manual tweaks** – seeded masonry packing that picks the
-  largest text size that fills the print area, crops images to close holes;
+- **Auto layout + manual tweaks** – four arrangements, each picking the
+  largest text size that fills the print area with clean outer edges:
+  *Columns* (even columns with full-width bands for long titles and rows of
+  landscape pictures), *Rows* (justified rows of equal height, like a photo
+  gallery), *Mosaic* (the area cut into one cell per tile, every tile fills
+  its cell, text sizes vary within a set range) and the classic *Masonry*.
+  An optimiser compares layout variants (fast / normal / thorough) and can
+  keep each article's tiles together and spread the pictures out.
   *Shuffle* for a new arrangement. Drag to move, resize from every edge and
   corner, rotate, snap to edges, centres and the layout spacing (toggle,
   Alt to move freely), zoom, per-tile text scale, undo/redo, shortcuts.

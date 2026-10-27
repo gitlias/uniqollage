@@ -363,6 +363,31 @@ await step('neat layout closes gaps', async () => {
   await page.screenshot({ path: `${out}/neat.png` });
 });
 
+await step('arrangements and optimisation', async () => {
+  await page.click('.settings-toggle');
+  // Neat filler text (from the step before) only exists in the column layouts.
+  let tiles = 0;
+  await page.locator('.settings-panel label', { hasText: /(Keep articles together|Artikel zusammenhalten)/ }).locator('input').check();
+  await page.locator('.settings-panel .seg button', { hasText: /^(Thorough|Gründlich)$/ }).click();
+  for (const [name, re] of [
+    ['rows', /^(Rows|Zeilen)$/],
+    ['mosaic', /^(Mosaic|Mosaik)$/],
+    ['masonry', /^(Masonry|Mauerwerk)/],
+    ['columns', /^(Columns|Spalten)$/],
+  ]) {
+    await page.locator('.settings-panel .seg button', { hasText: re }).click();
+    const n = await page.locator('.canvas .tile').count();
+    if (name === 'rows') tiles = n;
+    if (!n || (name === 'mosaic' && n !== tiles)) throw new Error(`${name}: ${n} tiles`);
+    await page.screenshot({ path: `${out}/arrange-${name}.png` });
+  }
+  // The neat slider only exists where there are holes to close.
+  await page.locator('.settings-panel .seg button', { hasText: /^(Mosaic|Mosaik)$/ }).click();
+  if (await page.locator('.settings-panel label', { hasText: /^(Neat|Ordentlich)/ }).count()) throw new Error('neat shown for mosaic');
+  await page.locator('.settings-panel .seg button', { hasText: /^(Columns|Spalten)$/ }).click();
+  await page.click('.settings-toggle');
+});
+
 await step('whole page from an article', async () => {
   await page.click('.tabs button >> nth=0');
   await page.fill('.header-search input', 'Ginkgo');

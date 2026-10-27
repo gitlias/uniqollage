@@ -1,5 +1,7 @@
 // Core data model. All geometry is in millimetres on the print area.
 
+import type { Arrangement, Optimize } from './layout/arrange';
+
 export type Lang = 'en' | 'de';
 
 export interface Source {
@@ -7,6 +9,8 @@ export interface Source {
   lang?: Lang;
   /** Article or file title. */
   title?: string;
+  /** For pictures: the article they were taken from (keeps them with it when grouping). */
+  article?: string;
   url?: string;
   license?: string;
   artist?: string;
@@ -127,6 +131,10 @@ export interface Project {
   skin?: Skin;
   /** Posters only: landscape orientation. */
   landscape?: boolean;
+  /** Auto layout method (default: balanced columns). */
+  arrangement?: Arrangement;
+  /** How hard the auto layout searches, and what it optimises for. */
+  optimize?: Partial<Optimize>;
   /** 0 = rows spread over the height; up to 1 = close gaps by growing tiles and adding filler text. */
   neat?: number;
   /** Spare sentences for filler text (collected by random fill and article additions). */
