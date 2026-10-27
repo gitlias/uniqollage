@@ -78,7 +78,9 @@ export async function ensureFonts(text: string): Promise<void> {
     for (const cp of todo) {
       const candidate = families
         .flatMap((f) => f.subsets.filter(([, r]) => inRanges(cp, r)).map(([subset]) => ({ f, subset })))
-        .find(({ f, subset }) => !tried.has(`${f.id}/${subset}`));
+        // Files still downloading count as candidates (their promise is reused);
+        // only finished ones that did not help are skipped.
+        .find(({ f, subset }) => !done.has(`${f.id}/${subset}`));
       if (!candidate) {
         unavailable.add(cp);
         continue;
@@ -91,11 +93,10 @@ export async function ensureFonts(text: string): Promise<void> {
   }
 }
 
-/** Files already loaded or attempted. */
-const tried = new Set<string>();
+/** Files whose download finished (successfully or not). */
+const done = new Set<string>();
 
 function loadFile(name: string, url: string): Promise<void> {
-  tried.add(name);
   let p = loading.get(name);
   if (!p) {
     p = fetch(url)
@@ -104,10 +105,12 @@ function loadFile(name: string, url: string): Promise<void> {
         return r.arrayBuffer();
       })
       .then((buf) => addFallbackFont(name, buf))
+      .then(() => {
+        done.add(name);
+      })
       .catch((e) => {
         console.warn('Font load failed', e);
-        loading.delete(name);
-        tried.delete(name);
+        done.add(name);
       });
     loading.set(name, p);
   }

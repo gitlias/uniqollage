@@ -57,6 +57,20 @@ describe.skipIf(!online)('on-demand script fonts', () => {
     for (const text of Object.values(samples)) expect(font('sans').shape(text).glyphs.every((g) => g.g !== 0), text).toBe(true);
   }, 60_000);
 
+  it('loads one CJK chunk per character even with concurrent requests', async () => {
+    const urls: string[] = [];
+    const prev = globalThis.fetch;
+    vi.stubGlobal('fetch', (u: string, i?: RequestInit) => {
+      urls.push(String(u));
+      return prev(u, i);
+    });
+    await Promise.all([ensureFonts('大阪'), ensureFonts('大阪'), ensureFonts('大阪 市')]);
+    vi.stubGlobal('fetch', prev);
+    const ttf = new Set(urls.filter((u) => u.endsWith('.ttf')));
+    expect(ttf.size).toBeLessThanOrEqual(3);
+    for (const ch of '大阪市') expect(isCovered(ch.codePointAt(0)!)).toBe(true);
+  }, 60_000);
+
   it('shapes Arabic into joined forms and Devanagari into conjuncts', () => {
     // Joined Arabic letters use different glyphs than the isolated form.
     const joined = font('sans').shape('سسس').glyphs.map((g) => g.g);
