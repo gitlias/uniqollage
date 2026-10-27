@@ -16,7 +16,19 @@ export function PrimEl({ p }: { p: Prim }) {
   }
 }
 
-export const TileView = memo(function TileView({ tile, baseSize, theme, skin }: { tile: Tile; baseSize: number; theme: Theme; skin?: Skin }) {
+export const TileView = memo(function TileView({
+  tile,
+  baseSize,
+  theme,
+  skin,
+}: {
+  tile: Tile;
+  baseSize: number;
+  theme: Theme;
+  skin?: Skin;
+  /** Changes when fonts were added, to re-render. */
+  epoch?: number;
+}) {
   const r = renderTile(tile, baseSize, theme, skin);
   return (
     <g transform={tileTransform(tile, r.h)}>

@@ -61,6 +61,10 @@ interface State {
   selected: string | null;
   /** True while the layout is untouched by manual edits; new tiles then trigger a re-layout. */
   autoLayout: boolean;
+  /** Bumped when fonts for further scripts arrive; views re-render on it. */
+  fontEpoch: number;
+  /** After font changes: re-run the layout (no undo step) if it is automatic. */
+  refreshLayout(): void;
   past: Project[];
   future: Project[];
 
@@ -120,6 +124,7 @@ export const useStore = create<State>((set, get) => ({
   })(),
   selected: null,
   autoLayout: true,
+  fontEpoch: 0,
   past: [],
   future: [],
 
@@ -175,6 +180,10 @@ export const useStore = create<State>((set, get) => ({
       const rest = p.tiles.filter((x) => x.id !== id);
       return { ...p, tiles: where === 'front' ? [...rest, t] : [t, ...rest] };
     });
+  },
+  refreshLayout() {
+    const { autoLayout, project } = get();
+    if (autoLayout && project.tiles.length) set({ project: relayout(project, false) });
   },
   arrange(shuffle) {
     get().update((p) => relayout(p, shuffle));

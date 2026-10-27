@@ -111,6 +111,7 @@ function bagOutline(shape: Shape, s: SizeSpec): Outline {
 export function Mockup() {
   const project = useStore((s) => s.project);
   const uiLang = useStore((s) => s.uiLang);
+  const epoch = useStore((s) => s.fontEpoch);
   const c = compose(project, uiLang);
   const product = productById(project.productId);
   const size = sizeOf(project.productId, project.sizeId);
@@ -119,7 +120,7 @@ export function Mockup() {
   const design = (
     <>
       {c.placed.map((p) => (
-        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} />
+        <TileView key={p.tile.id} tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} epoch={epoch} />
       ))}
       {c.credit.map((p, i) => (
         <PrimEl key={i} p={p} />

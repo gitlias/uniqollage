@@ -17,6 +17,7 @@ export function Canvas() {
   const project = useStore((s) => s.project);
   const selected = useStore((s) => s.selected);
   const uiLang = useStore((s) => s.uiLang);
+  const epoch = useStore((s) => s.fontEpoch);
   const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -136,7 +137,7 @@ export function Canvas() {
               start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y });
             }}
           >
-            <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} />
+            <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} epoch={epoch} />
             <rect
               transform={`translate(${p.tile.x} ${p.tile.y}) rotate(${p.tile.rot} ${p.tile.w / 2} ${p.h / 2})`}
               width={p.tile.w}

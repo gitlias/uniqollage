@@ -1,5 +1,6 @@
 import type { CardTile, ImageStyle, ImageTile, InfoboxTile, Skin, Theme, Tile, TextTile, TitleTile } from '../model';
 import { layoutText } from '../text/layout';
+import { fontEpoch } from '../text/fonts';
 import { parseMarkup } from '../text/markup';
 
 // Every tile renders to a small display list in local millimetre coordinates
@@ -276,12 +277,13 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
 }
 
 // Rendering is pure; cache by tile identity (tiles are immutable in the store) and size.
-const cache = new WeakMap<Tile, { b: number; theme: Theme; skin: Skin; r: Rendered }>();
+const cache = new WeakMap<Tile, { b: number; theme: Theme; skin: Skin; epoch: number; r: Rendered }>();
 
 export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light', sk: Skin = 'vector2010'): Rendered {
   const b = baseSize * t.scale;
   const hit = cache.get(t);
-  if (hit && hit.b === b && hit.theme === theme && hit.skin === sk) return hit.r;
+  const epoch = fontEpoch();
+  if (hit && hit.b === b && hit.theme === theme && hit.skin === sk && hit.epoch === epoch) return hit.r;
   pal = paletteFor(theme, sk);
   skin = sk;
   let r: Rendered;
@@ -302,8 +304,24 @@ export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light', sk
       r = renderCard(t, b);
       break;
   }
-  cache.set(t, { b, theme, skin: sk, r });
+  cache.set(t, { b, theme, skin: sk, epoch, r });
   return r;
+}
+
+/** All text a tile draws (to load fonts for it). */
+export function tileText(t: Tile): string {
+  switch (t.type) {
+    case 'title':
+      return t.text;
+    case 'text':
+      return t.markup;
+    case 'image':
+      return t.caption;
+    case 'infobox':
+      return [t.heading, t.imageCaption ?? '', ...t.rows.flat()].join(' ');
+    case 'card':
+      return [t.title, t.description ?? '', t.markup].join(' ');
+  }
 }
 
 /** Height a tile would have at width `w` (used by the auto layout). */

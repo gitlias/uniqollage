@@ -107,6 +107,14 @@ await step('zoom on a classic image tile', async () => {
   await img.screenshot({ path: `${out}/tile-classic.png`, scale: 'device' });
 });
 
+await step('typing Arabic loads the Arabic font', async () => {
+  const fontReq = page.waitForRequest((r) => r.url().includes('noto-sans-arabic'), { timeout: 30000 });
+  await page.locator('.tile-list li').filter({ hasText: 'Ginkgos are popular' }).first().click();
+  await page.fill('.inspector textarea', 'القاهرة هي عاصمة مصر');
+  await fontReq;
+  await page.waitForTimeout(1500);
+});
+
 await step('select, drag, rotate a tile', async () => {
   const hit = page.locator('.canvas .tile .hit').nth(2);
   const box = await hit.boundingBox();

@@ -1,8 +1,11 @@
-import opentype from 'opentype.js';
-import type { Font } from 'opentype.js';
+import * as hb from 'harfbuzzjs';
+import { woffToSfnt } from './woff';
 
-// Text is measured *and* drawn with opentype.js outlines, so the editor preview,
-// the PNG and the vector exports are identical and need no font embedding.
+// Text is shaped with HarfBuzz (ligatures, Arabic joining, Indic reordering,
+// mark positioning) and drawn from the fonts' glyph outlines, so the editor
+// preview, the PNG and the vector exports are identical and need no font
+// embedding. Characters outside the bundled fonts are covered by Noto fonts
+// that are loaded on demand (see fallback.ts).
 
 export type FontStyle = 'serif' | 'serifItalic' | 'sans' | 'sansBold' | 'sansItalic' | 'sansBoldItalic';
 
@@ -26,82 +29,144 @@ export function fontFiles(): { style: FontStyle; subset: string; path: string }[
   return out;
 }
 
-// opentype.js 2.0's Path.toPathData occasionally emits "NaN" when rounding,
-// so serialise the commands ourselves.
-const num = (v: number) => String(Math.round(v * 1000) / 1000);
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function pathData(cmds: any[]): string {
-  let d = '';
-  for (const c of cmds) {
-    if (c.type === 'M' || c.type === 'L') d += `${c.type}${num(c.x)} ${num(c.y)}`;
-    else if (c.type === 'Q') d += `Q${num(c.x1)} ${num(c.y1)} ${num(c.x)} ${num(c.y)}`;
-    else if (c.type === 'C') d += `C${num(c.x1)} ${num(c.y1)} ${num(c.x2)} ${num(c.y2)} ${num(c.x)} ${num(c.y)}`;
-    else if (c.type === 'Z') d += 'Z';
-  }
-  return d;
+interface LoadedFont {
+  name: string;
+  font: hb.Font;
+  upem: number;
+  cps: Set<number>;
+  /** Glyph outlines in font units, cached per glyph id. */
+  outlines: Map<number, { type: string; values: number[] }[]>;
 }
 
-/** Variation selectors and other format characters crash or confuse shaping. */
-const FORMAT_CHARS = /[\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]|\udb40[\udd00-\uddef]/g;
+function load(name: string, sfnt: ArrayBuffer): LoadedFont {
+  const face = new hb.Face(new hb.Blob(sfnt));
+  return { name, font: new hb.Font(face), upem: face.upem, cps: new Set(face.collectUnicodes()), outlines: new Map() };
+}
 
-/** A primary font plus fallbacks for characters outside its subset. */
+/** Fonts loaded on demand for other scripts; shared by every style. */
+const fallbacks: LoadedFont[] = [];
+
+/** Right-to-left scripts. */
+const RTL = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Adlam}\p{Script=Samaritan}\p{Script=Mandaic}]/u;
+const STRONG = /[\p{L}]/u;
+
+/** Direction of the first strong character, or null for neutral text (digits, punctuation). */
+export function strongDirection(text: string): 'ltr' | 'rtl' | null {
+  for (const ch of text) {
+    if (RTL.test(ch)) return 'rtl';
+    if (STRONG.test(ch)) return 'ltr';
+  }
+  return null;
+}
+
+/** Characters that only confuse layout (zero-width space, bidi embedding controls, BOM). */
+const STRIP = /[​‪-‮⁦-⁩﻿]/g;
+const MARK = /\p{M}/u;
+
+let sharedBuffer: hb.Buffer | null = null;
+
+interface Shaped {
+  /** Advance in em. */
+  width: number;
+  glyphs: { f: LoadedFont; g: number; x: number; dy: number }[];
+}
+
+/** A primary font (all subsets of one family/style) plus the shared fallbacks. */
 export class FontChain {
-  constructor(readonly fonts: Font[]) {}
+  constructor(readonly fonts: LoadedFont[]) {}
 
-  private fontFor(ch: string): Font {
-    const cp = ch.codePointAt(0)!;
-    for (const f of this.fonts) {
-      if (f.charToGlyphIndex(String.fromCodePoint(cp)) > 0) return f;
-    }
+  private fontFor(cp: number): LoadedFont {
+    for (const f of this.fonts) if (f.cps.has(cp)) return f;
+    for (const f of fallbacks) if (f.cps.has(cp)) return f;
     return this.fonts[0];
   }
 
-  /** Split text into runs that each render with a single font. */
-  private segments(text: string): { font: Font; text: string }[] {
-    const segs: { font: Font; text: string }[] = [];
-    for (const ch of text.replace(FORMAT_CHARS, '')) {
-      // Spaces exist in every font; keep them in the current run to preserve kerning.
-      const f = ch === ' ' && segs.length ? segs[segs.length - 1].font : this.fontFor(ch);
+  covers(cp: number): boolean {
+    return this.fonts.some((f) => f.cps.has(cp)) || fallbacks.some((f) => f.cps.has(cp));
+  }
+
+  /** Split text into runs that each render with a single font (marks stay with their base). */
+  private segments(text: string): { font: LoadedFont; text: string }[] {
+    const segs: { font: LoadedFont; text: string }[] = [];
+    for (const ch of text.replace(STRIP, '')) {
       const last = segs[segs.length - 1];
+      const keep = last && (ch === ' ' || MARK.test(ch) || ch === '‌' || ch === '‍');
+      const f = keep ? last.font : this.fontFor(ch.codePointAt(0)!);
       if (last && last.font === f) last.text += ch;
       else segs.push({ font: f, text: ch });
     }
     return segs;
   }
 
-  // Advance widths scale linearly with size, so cache them at size 1.
-  private unitWidths = new Map<string, number>();
+  private cache = new Map<string, Shaped>();
+
+  shape(text: string): Shaped {
+    let s = this.cache.get(text);
+    if (s) return s;
+    const rtl = strongDirection(text) === 'rtl';
+    const runs = this.segments(text).map((seg) => {
+      const buf = (sharedBuffer ??= new hb.Buffer());
+      buf.reset();
+      buf.addText(seg.text);
+      buf.guessSegmentProperties();
+      buf.setDirection(rtl ? hb.Direction.RTL : hb.Direction.LTR);
+      hb.shape(seg.font.font, buf);
+      const out = buf.getGlyphInfosAndPositions().map((g) => ({ g: g.codepoint, adv: (g.xAdvance ?? 0) / seg.font.upem, dx: (g.xOffset ?? 0) / seg.font.upem, dy: (g.yOffset ?? 0) / seg.font.upem }));
+      return { font: seg.font, glyphs: out };
+    });
+    // HarfBuzz returns each run in visual order; RTL runs also follow each other right to left.
+    if (rtl) runs.reverse();
+    const glyphs: Shaped['glyphs'] = [];
+    let x = 0;
+    for (const r of runs) {
+      for (const g of r.glyphs) {
+        glyphs.push({ f: r.font, g: g.g, x: x + g.dx, dy: g.dy });
+        x += g.adv;
+      }
+    }
+    s = { width: x, glyphs };
+    if (this.cache.size > 50_000) this.cache.clear();
+    this.cache.set(text, s);
+    return s;
+  }
 
   measure(text: string, size: number): number {
-    let w = this.unitWidths.get(text);
-    if (w === undefined) {
-      w = 0;
-      for (const s of this.segments(text)) w += s.font.getAdvanceWidth(s.text, 1, { kerning: true });
-      if (this.unitWidths.size > 50_000) this.unitWidths.clear();
-      this.unitWidths.set(text, w);
-    }
-    return w * size;
+    return this.shape(text).width * size;
   }
 
   /** SVG path data for `text` with its baseline starting at (x, y). */
   path(text: string, x: number, y: number, size: number): string {
     let d = '';
-    for (const s of this.segments(text)) {
-      d += pathData(s.font.getPath(s.text, x, y, size, { kerning: true }).commands);
-      x += s.font.getAdvanceWidth(s.text, size, { kerning: true });
+    for (const gl of this.shape(text).glyphs) {
+      let cmds = gl.f.outlines.get(gl.g);
+      if (!cmds) {
+        cmds = gl.f.font.glyphToJson(gl.g);
+        gl.f.outlines.set(gl.g, cmds);
+      }
+      const k = size / gl.f.upem;
+      const ox = x + gl.x * size;
+      const oy = y - gl.dy * size;
+      for (const c of cmds) {
+        d += c.type;
+        for (let i = 0; i < c.values.length; i += 2) {
+          if (i) d += ' ';
+          d += `${num(ox + c.values[i] * k)} ${num(oy - c.values[i + 1] * k)}`;
+        }
+      }
     }
     return d;
   }
 
-  /** Ascender as a fraction of the font size. */
-  get ascent(): number {
-    const f = this.fonts[0];
-    return f.ascender / f.unitsPerEm;
+  clearCache(): void {
+    this.cache.clear();
   }
 }
 
+const num = (v: number) => String(Math.round(v * 1000) / 1000);
+
 let chains: Record<FontStyle, FontChain> | null = null;
+let epoch = 0;
+const listeners = new Set<() => void>();
 
 export function fontsReady(): boolean {
   return chains !== null;
@@ -112,13 +177,37 @@ export function font(style: FontStyle): FontChain {
   return chains[style];
 }
 
+/** Increases whenever fonts were added; renderers key their caches on it. */
+export function fontEpoch(): number {
+  return epoch;
+}
+
+export function onFontsChanged(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+/** True if some loaded font has a glyph for the code point. */
+export function isCovered(cp: number): boolean {
+  return font('sans').covers(cp) || font('serif').covers(cp);
+}
+
+/** Add a fallback font (TTF/OTF/WOFF) for further scripts and re-render. */
+export async function addFallbackFont(name: string, data: ArrayBuffer): Promise<void> {
+  if (fallbacks.some((f) => f.name === name)) return;
+  fallbacks.push(load(name, await woffToSfnt(data)));
+  for (const c of Object.values(chains ?? {})) c.clearCache();
+  epoch++;
+  for (const cb of listeners) cb();
+}
+
 /** Install fonts from raw WOFF buffers (path → buffer as returned by `fontFiles`). */
-export function installFonts(buffers: Map<string, ArrayBuffer>): void {
-  const byStyle = {} as Record<FontStyle, Font[]>;
+export async function installFonts(buffers: Map<string, ArrayBuffer>): Promise<void> {
+  const byStyle = {} as Record<FontStyle, LoadedFont[]>;
   for (const { style, path } of fontFiles()) {
     const buf = buffers.get(path);
     if (!buf) continue;
-    (byStyle[style] ??= []).push(opentype.parse(buf));
+    (byStyle[style] ??= []).push(load(path, await woffToSfnt(buf)));
   }
   const out = {} as Record<FontStyle, FontChain>;
   for (const style of Object.keys(FILES) as FontStyle[]) {
@@ -137,8 +226,8 @@ export async function loadFonts(): Promise<void> {
       '/node_modules/@fontsource/libertinus-serif/files/libertinus-serif-{latin,latin-ext,greek,greek-ext,cyrillic,cyrillic-ext,vietnamese}-400-{normal,italic}.woff',
     ],
     {
-    query: '?url',
-    import: 'default',
+      query: '?url',
+      import: 'default',
       eager: true,
     },
   ) as Record<string, string>;
@@ -151,5 +240,5 @@ export async function loadFonts(): Promise<void> {
       buffers.set(path, await res.arrayBuffer());
     }),
   );
-  installFonts(buffers);
+  await installFonts(buffers);
 }
