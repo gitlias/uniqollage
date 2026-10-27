@@ -969,3 +969,9 @@ button.add {
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
+.canvas .margin-guide {
+  fill: none;
+  stroke: #72a7f0;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}

@@ -4,7 +4,7 @@ import type { Skin } from '../model';
 const SKINS: Skin[] = ['vector2010', 'vector2022', 'monobook', 'minerva'];
 import { useT } from '../i18n';
 import { useUi } from '../ui';
-import { garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
+import { areaOf, garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
 
 export function Toolbar() {
   const t = useT();
@@ -17,6 +17,8 @@ export function Toolbar() {
   const s = useStore.getState();
   const product = productById(p.productId);
   const offer = offerIn(product, p.region);
+  const area = areaOf(p);
+  const maxMargin = Math.floor(Math.min(area.w, area.h) / 4);
   const size = offer.sizes.find((x) => x.id === p.sizeId);
 
   const setSize = (baseSize: number) => {
@@ -43,7 +45,13 @@ export function Toolbar() {
             value={product.id}
             onChange={(e) => {
               const next = productById(e.target.value);
-              updateAndRelayout((x) => normalize({ ...x, productId: next.id, sizeId: next.defaultSize }));
+              updateAndRelayout((x) => {
+                // Posters usually want a white border, garments usually don't.
+                const toPoster = next.shape === 'poster' && product.shape !== 'poster';
+                const fromPoster = next.shape !== 'poster' && product.shape === 'poster';
+                const margins = toPoster && !x.margins ? 15 : fromPoster && x.margins === 15 ? 0 : x.margins;
+                return normalize({ ...x, productId: next.id, sizeId: next.defaultSize, margins });
+              });
             }}
           >
             {productsIn(p.region).map((pr) => (
@@ -83,18 +91,19 @@ export function Toolbar() {
                 {t('landscape')}
               </button>
             </div>
-            <label>
-              {t('margin')}
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={p.margin ?? 0}
-                onChange={(e) => updateAndRelayout((x) => ({ ...x, margin: Math.min(100, Math.max(0, Number(e.target.value))) }))}
-              />
-            </label>
           </>
         )}
+        <label title={t('marginHint')}>
+          {t('margin')}
+          <input
+            type="number"
+            min={0}
+            max={maxMargin}
+            step={1}
+            value={p.margins ?? 0}
+            onChange={(e) => updateAndRelayout((x) => ({ ...x, margins: Math.min(maxMargin, Math.max(0, Number(e.target.value) || 0)) }))}
+          />
+        </label>
         {p.productId === 'custom' && (
           <>
             <label>

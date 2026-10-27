@@ -10,7 +10,7 @@ import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
 import { HANDLES, resizeTile, type Handle } from '../layout/resize';
 import type { Tile } from '../model';
 import { boundsOf, MOVE_EDGES, snapBox, type Box, type Guide, type SnapEdges } from '../layout/snap';
-import { contentBox } from '../render/collage';
+import { contentBox, marginOf } from '../render/collage';
 import { tileHeight } from '../render/tiles';
 
 /** Snap distance in screen pixels. */
@@ -44,6 +44,7 @@ export function Canvas() {
   const vb = useViewBox({ x: -pad, y: -pad, w: c.w + 2 * pad, h: c.h + 2 * pad });
   const startPan = useZoomGestures(svgRef, vb);
   const sel = c.placed.find((p) => p.tile.id === selected);
+  const margin = marginOf(project);
   const overflow = c.placed.some((p) => p.tile.y + p.h > c.h + 0.5 || p.tile.x + p.tile.w > c.w + 0.5 || p.tile.x < -0.5 || p.tile.y < -0.5);
 
   const toLocal = (e: { clientX: number; clientY: number }) => {
@@ -227,6 +228,9 @@ export function Canvas() {
           pointerEvents="none"
         />
         <rect x={0} y={0} width={c.w} height={c.h} fill="none" stroke={overflow ? '#d33' : '#a2a9b1'} strokeDasharray="2 1.5" strokeWidth={0.4} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        {margin > 0 && (
+          <rect className="margin-guide" x={margin} y={margin} width={c.w - 2 * margin} height={c.h - 2 * margin} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        )}
         {guides.map((g, i) => (
           <line key={i} className="snap-guide" x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
         ))}

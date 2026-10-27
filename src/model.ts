@@ -117,7 +117,9 @@ export interface Project {
   skin?: Skin;
   /** Posters only: landscape orientation. */
   landscape?: boolean;
-  /** Posters only: white margin around the collage, mm. */
+  /** Empty margin around the collage inside the print area / poster, mm (all products). */
+  margins?: number;
+  /** @deprecated Poster-only margin of older projects; migrated to `margins`. */
   margin?: number;
   /** Only used when productId === 'custom'. */
   customArea: { w: number; h: number };

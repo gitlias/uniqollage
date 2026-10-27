@@ -277,6 +277,20 @@ await step('German UI', async () => {
   await page.waitForSelector('text=Mischen');
 });
 
+await step('adjustable margin', async () => {
+  const marginInput = page.locator('.toolbar label', { hasText: /^(Margin|Rand)/ }).locator('input');
+  await marginInput.fill('20');
+  await page.waitForSelector('.canvas .margin-guide');
+  const guide = await page.locator('.canvas .margin-guide').boundingBox();
+  const pg = await page.locator('svg.canvas > rect').first().boundingBox();
+  if (!(guide.x > pg.x + 5 && guide.width < pg.width - 10)) throw new Error('margin guide not inset');
+  // Tiles stay inside the margin after re-arranging.
+  const boxes = await page.locator('.canvas .tile .hit').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y, r: r.right })));
+  if (boxes.some((b) => b.x < guide.x - 1 || b.r > guide.x + guide.width + 1)) throw new Error('tiles outside the margin');
+  await page.screenshot({ path: `${out}/margin.png` });
+  await marginInput.fill('0');
+});
+
 await step('snapping to the page edge (Alt moves freely)', async () => {
   // A defined project: one unrotated tile, nothing else to snap to.
   const project = { version: 1, region: 'de', productId: 'basic-t', sizeId: 'M', theme: 'light', skin: 'vector2010', customArea: { w: 250, h: 320 }, baseSize: 4, autoSize: false, credit: false, seed: 1, garment: 'white',

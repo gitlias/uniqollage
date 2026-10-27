@@ -9,9 +9,10 @@ export function creditSize(area: { w: number }): number {
   return Math.min(3, Math.max(1.6, area.w / 140));
 }
 
-/** White margin around poster collages (0 for garments and bags). */
+/** Empty margin around the collage, limited so some content area is left. */
 export function marginOf(p: Project): number {
-  return isPoster(p.productId) ? Math.max(0, p.margin ?? 0) : 0;
+  const area = areaOf(p);
+  return Math.min(Math.max(0, p.margins ?? 0), Math.min(area.w, area.h) / 4);
 }
 
 /** Area available to tiles (print area minus margin and the optional credit strip). */

@@ -6,7 +6,7 @@ import { compose, compositionToSvg, contentBox, pageBackground } from '../src/re
 
 beforeAll(setupFonts);
 
-const poster = { ...emptyProject(), productId: 'poster', sizeId: 'A2', margin: 20, credit: false };
+const poster = { ...emptyProject(), productId: 'poster', sizeId: 'A2', margins: 20, credit: false };
 
 describe('posters', () => {
   it('is offered in every region', () => {
@@ -18,9 +18,22 @@ describe('posters', () => {
     expect(areaOf({ ...poster, landscape: true })).toEqual({ w: 594, h: 420 });
     expect(areaOf({ ...poster, sizeId: '50×70 cm' })).toEqual({ w: 500, h: 700 });
   });
-  it('insets the content by the margin, garments ignore it', () => {
+  it('insets the content by the margin, for posters and garments', () => {
     expect(contentBox(poster)).toEqual({ x: 20, y: 20, w: 380, h: 554 });
-    expect(contentBox({ ...emptyProject(), margin: 20, credit: false })).toEqual({ x: 0, y: 0, w: 310, h: 354 });
+    expect(contentBox({ ...emptyProject(), margins: 20, credit: false })).toEqual({ x: 20, y: 20, w: 270, h: 314 });
+    expect(contentBox({ ...emptyProject(), credit: false })).toEqual({ x: 0, y: 0, w: 310, h: 354 });
+    // Capped at a quarter of the shorter side.
+    expect(contentBox({ ...emptyProject(), margins: 500, credit: false }).x).toBeCloseTo(310 / 4);
+  });
+  it('migrates the old poster-only margin', async () => {
+    const { migrate } = await import('../src/store');
+    const legacy = (p: object) => {
+      const x = { ...emptyProject(), ...p } as Record<string, unknown>;
+      delete x.margins;
+      return migrate(x as never);
+    };
+    expect(legacy({ productId: 'poster', sizeId: 'A2', margin: 25 }).margins).toBe(25);
+    expect(legacy({ productId: 'basic-t', margin: 15 }).margins).toBe(0);
   });
   it('exports with paper background and bleed', () => {
     expect(pageBackground(poster)).toBe('#ffffff');

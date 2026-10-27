@@ -14,7 +14,7 @@ export function emptyProject(): Project {
     theme: 'light',
     skin: 'vector2010',
     landscape: false,
-    margin: 15,
+    margins: 0,
     customArea: { w: 250, h: 320 },
     baseSize: 3,
     autoSize: true,
@@ -52,7 +52,9 @@ export function migrate(p: Project): Project {
   const tiles = (p.tiles ?? []).map((t) =>
     t.type === 'image' ? { ...t, image: repairImage(t.image) } : t.type === 'infobox' ? { ...t, image: repairImage(t.image) } : t,
   );
-  return normalize({ ...emptyProject(), ...p, tiles, theme: p.theme ?? 'light' });
+  // Margins used to exist for posters only.
+  const margins = p.margins ?? (productById(p.productId).shape === 'poster' ? (p.margin ?? 15) : 0);
+  return normalize({ ...emptyProject(), ...p, tiles, margins, theme: p.theme ?? 'light' });
 }
 
 interface State {
