@@ -44,6 +44,42 @@ function inRanges(cp: number, ranges: [number, number][]): boolean {
   return false;
 }
 
+const CJK_FAMILIES = new Set(['noto-sans-sc', 'noto-sans-tc', 'noto-sans-hk', 'noto-sans-jp', 'noto-sans-kr']);
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}\u3000-\u303f\uff00-\uffef]/u;
+
+/** "noto-sans-old-italic" → /\p{Script=Old_Italic}/u, or null if not a Unicode script name. */
+const scriptRegex = new Map<string, RegExp | null>();
+function familyScript(id: string): RegExp | null {
+  if (!scriptRegex.has(id)) {
+    const name = id
+      .replace(/^noto-(sans|serif)-/, '')
+      .split('-')
+      .map((w) => w[0].toUpperCase() + w.slice(1))
+      .join('_');
+    let re: RegExp | null = null;
+    try {
+      re = new RegExp(`\\p{Script=${name}}`, 'u');
+    } catch {
+      re = null;
+    }
+    scriptRegex.set(id, re);
+  }
+  return scriptRegex.get(id)!;
+}
+
+/**
+ * Preference for a font family: one made for the character's script first,
+ * then generic Noto Sans, then the rest. The unicode-range lists of the CJK
+ * (and some other) families claim far more than their files contain, so CJK
+ * fonts only come first for CJK characters.
+ */
+function rank(id: string, ch: string): number {
+  if (CJK_FAMILIES.has(id)) return CJK_CHAR.test(ch) ? 0 : 4;
+  if (familyScript(id)?.test(ch)) return 1;
+  if (id === 'noto-sans') return 2;
+  return 3;
+}
+
 /** Characters that never need a glyph. */
 const IGNORABLE = /[\s\p{Cc}\p{Cf}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/u;
 
@@ -76,8 +112,10 @@ export async function ensureFonts(text: string): Promise<void> {
     if (!todo.length) return;
     const files = new Map<string, string>();
     for (const cp of todo) {
+      const ch = String.fromCodePoint(cp);
       const candidate = families
-        .flatMap((f) => f.subsets.filter(([, r]) => inRanges(cp, r)).map(([subset]) => ({ f, subset })))
+        .flatMap((f, order) => f.subsets.filter(([, r]) => inRanges(cp, r)).map(([subset]) => ({ f, subset, order, rank: rank(f.id, ch) })))
+        .sort((a, b) => a.rank - b.rank || a.order - b.order)
         // Files still downloading count as candidates (their promise is reused);
         // only finished ones that did not help are skipped.
         .find(({ f, subset }) => !done.has(`${f.id}/${subset}`));

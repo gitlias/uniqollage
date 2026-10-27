@@ -71,6 +71,20 @@ describe.skipIf(!online)('on-demand script fonts', () => {
     for (const ch of '大阪市') expect(isCovered(ch.codePointAt(0)!)).toBe(true);
   }, 60_000);
 
+  it('picks the font made for each script (CJK chunk ranges over-claim)', async () => {
+    const urls: string[] = [];
+    const prev = globalThis.fetch;
+    vi.stubGlobal('fetch', (u: string, i?: RequestInit) => {
+      urls.push(String(u));
+      return prev(u, i);
+    });
+    await ensureFonts('سلام ภาษาไทย ქართული Հայերեն ܐܪܡܝܐ');
+    vi.stubGlobal('fetch', prev);
+    const ttf = urls.filter((u) => u.endsWith('.ttf')).map((u) => u.split('/fonts/')[1].split('@')[0]);
+    expect(ttf.some((id) => ['noto-sans-sc', 'noto-sans-tc', 'noto-sans-hk', 'noto-sans-mongolian'].includes(id))).toBe(false);
+    for (const ch of 'ไქՀܐ') expect(isCovered(ch.codePointAt(0)!), ch).toBe(true);
+  }, 60_000);
+
   it('shapes Arabic into joined forms and Devanagari into conjuncts', () => {
     // Joined Arabic letters use different glyphs than the isolated form.
     const joined = font('sans').shape('سسس').glyphs.map((g) => g.g);
