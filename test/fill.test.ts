@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { allocate, FILL_TYPES, randomFill } from '../src/wiki/randomFill';
+import { allocate, EmptyCategoryError, FILL_TYPES, randomFill } from '../src/wiki/randomFill';
 import { rng } from '../src/layout/pack';
 // @ts-expect-error plain JS fixture shared with the browser test
 import { handle } from './e2e/fixtures.mjs';
@@ -31,5 +31,31 @@ describe('randomFill', () => {
     expect(progress.at(-1)).toBe(res.drafts.length);
     // Pictures use standard Wikimedia widths.
     for (const d of res.drafts) if (d.type === 'image') expect(d.image.src).toMatch(/\/(1920|250)px-/);
+  });
+});
+
+describe('randomFill with a category', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('only uses articles of the category and its subcategories, and skips DYK', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      const r = handle(url);
+      return new Response(r.body, { status: r.status ?? 200, headers: { 'content-type': r.contentType } });
+    });
+    const res = await randomFill({ types: ['fact', 'card', 'title', 'dyk'], count: 6, langs: ['de', 'en'], category: 'Bäume', rand: rng(4) });
+    const allowed = new Set(['Ginkgo', 'Eiche', 'Linde', 'Tanne', 'Fichte']);
+    expect(res.drafts.length).toBeGreaterThan(0);
+    for (const d of res.drafts) expect(allowed.has(d.source.title ?? ''), d.source.title).toBe(true);
+    expect(urls.some((u) => u.includes('random'))).toBe(false);
+    expect(urls.some((u) => u.includes('Schon') || u.includes('Did_you_know'))).toBe(false);
+    expect(urls.every((u) => !u.includes('en.wikipedia.org'))).toBe(true);
+  });
+  it('reports an empty category', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      const r = handle(url);
+      return new Response(r.body, { status: r.status ?? 200, headers: { 'content-type': r.contentType } });
+    });
+    await expect(randomFill({ types: ['fact'], count: 5, langs: ['de'], category: 'Gibtsnicht' })).rejects.toBeInstanceOf(EmptyCategoryError);
   });
 });

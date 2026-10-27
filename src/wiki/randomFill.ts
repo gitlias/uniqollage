@@ -1,5 +1,5 @@
-import type { Lang, Source, TileDraft } from '../model';
-import { articleUrl, didYouKnow, imageInfo, loadLead, randomArticles, type ImageInfo, type RandomArticle } from './api';
+import type { Lang, ReserveItem, Source, TileDraft } from '../model';
+import { articleSummaries, articleUrl, categoryArticles, didYouKnow, imageInfo, loadLead, randomArticles, type ImageInfo, type RandomArticle } from './api';
 import { cardDraft } from './cards';
 import { measureAspect } from '../components/common';
 import { dykTileMarkup, type Figure, type ParsedArticle } from './parse';
@@ -20,13 +20,24 @@ export interface FillOptions {
   types: FillType[];
   count: number;
   langs: Lang[];
+  /**
+   * Only use articles from this Wikipedia category (and some of its
+   * subcategories). Categories are per language, so the first of `langs`
+   * is used; "Did you know" hooks can't be filtered and are skipped.
+   */
+  category?: string;
   /** Called with the number of tiles found so far. */
   onProgress?: (done: number) => void;
   rand?: () => number;
 }
 
+/** Thrown when a category has no articles (or does not exist). */
+export class EmptyCategoryError extends Error {}
+
 export interface FillResult {
   drafts: TileDraft[];
+  /** Further good sentences from the articles that were read (filler material for the neat layout). */
+  reserve: ReserveItem[];
   /** Per type, how many could not be found. */
   missing: Partial<Record<FillType, number>>;
 }
@@ -92,9 +103,15 @@ async function imageDraft(fig: Figure, info: ImageInfo | undefined, article: { l
 
 export async function randomFill(opts: FillOptions): Promise<FillResult> {
   const rand = opts.rand ?? Math.random;
-  const langs = opts.langs.length ? opts.langs : (['en'] as Lang[]);
-  const need = allocate(opts.types, opts.count, rand);
+  const category = opts.category?.trim();
+  const langs = opts.langs.length ? (category ? [opts.langs[0]] : opts.langs) : (['en'] as Lang[]);
+  const types = category ? opts.types.filter((t) => t !== 'dyk') : opts.types;
+  const need = allocate(types.length ? types : ['fact'], opts.count, rand);
+  // Articles of the chosen category, in random order (taken 20 at a time).
+  const pool = category ? shuffle(await categoryArticles(langs[0], category, opts.count * 3), rand) : null;
+  if (pool && !pool.length) throw new EmptyCategoryError(category);
   const drafts: TileDraft[] = [];
+  const reserve: ReserveItem[] = [];
   const push = (d: TileDraft) => {
     drafts.push(d);
     opts.onProgress?.(drafts.length);
@@ -129,11 +146,13 @@ export async function randomFill(opts: FillOptions): Promise<FillResult> {
 
   // Everything else comes from random articles.
   const used = new Set<string>();
-  for (let round = 0; round < 10 && (need.fact || need.image || need.infobox || need.card || need.title); round++) {
+  for (let round = 0; round < (pool ? 30 : 10) && (need.fact || need.image || need.infobox || need.card || need.title); round++) {
     const lang = pick(langs, rand);
     let batch: RandomArticle[];
     try {
-      batch = (await randomArticles(lang, 20)).filter((a) => !used.has(`${lang}:${a.title}`));
+      if (pool && !pool.length) break;
+      const fetched = pool ? await articleSummaries(lang, pool.splice(0, 20)) : await randomArticles(lang, 20);
+      batch = fetched.filter((a) => !used.has(`${lang}:${a.title}`));
     } catch {
       continue;
     }
@@ -164,6 +183,10 @@ export async function randomFill(opts: FillOptions): Promise<FillResult> {
 
     for (const lead of leads) {
       const source: Source = { kind: 'wikipedia', lang, title: lead.title, url: articleUrl(lang, lead.title) };
+      for (const s of lead.sentences) {
+        const n = stripMarkup(s.markup).length;
+        if (n >= 40 && n <= 260) reserve.push({ markup: s.markup, source });
+      }
       const fig = lead.infobox?.image ?? lead.figures[0];
       const facts = lead.sentences.filter((s) => stripMarkup(s.markup).length >= 40).sort((a, b) => b.score - a.score);
       if (need.infobox && lead.infobox && lead.infobox.rows.length >= 2) {
@@ -199,5 +222,6 @@ export async function randomFill(opts: FillOptions): Promise<FillResult> {
 
   const missing: FillResult['missing'] = {};
   for (const t of FILL_TYPES) if (need[t] > 0) missing[t] = need[t];
-  return { drafts: shuffle(drafts, rand), missing };
+  const taken = new Set(drafts.map((d) => (d.type === 'text' ? d.markup : '')));
+  return { drafts: shuffle(drafts, rand), missing, reserve: reserve.filter((r) => !taken.has(r.markup)) };
 }

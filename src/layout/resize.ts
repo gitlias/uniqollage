@@ -36,7 +36,10 @@ function scaleForHeight(t: Tile, target: number, height: (t: Tile) => number): n
  * New placement/size for dragging `handle` of tile `t0` (rendered height `h0`)
  * by (dx, dy) page millimetres.
  */
-export function resizeTile(t0: Tile, h0: number, handle: Handle, dx: number, dy: number, ctx: { baseSize: number; skin: Skin }): Partial<Tile> {
+export function resizeTile(orig: Tile, h0: number, handle: Handle, dx: number, dy: number, ctx: { baseSize: number; skin: Skin }): Partial<Tile> {
+  // Growth from the neat layout becomes part of the tile's own scale.
+  const folded = !!orig.grow;
+  const t0 = folded ? ({ ...orig, scale: orig.scale * orig.grow!, grow: undefined } as Tile) : orig;
   const height = (t: Tile) => tileHeight(t, t.w, ctx.baseSize, ctx.skin);
   const a = (t0.rot * Math.PI) / 180;
   const cos = Math.cos(a);
@@ -89,5 +92,6 @@ export function resizeTile(t0: Tile, h0: number, handle: Handle, dx: number, dy:
   const page = { x: t0.x + t0.w / 2 + r0.x, y: t0.y + h0 / 2 + r0.y };
   const a1 = anchor(t1.w, h1);
   const r1 = rotate(a1.x - t1.w / 2, a1.y - h1 / 2);
-  return { ...patch, x: page.x - r1.x - t1.w / 2, y: page.y - r1.y - h1 / 2 };
+  const fold = folded ? { scale: t0.scale, grow: undefined } : {};
+  return { ...fold, ...patch, x: page.x - r1.x - t1.w / 2, y: page.y - r1.y - h1 / 2 };
 }

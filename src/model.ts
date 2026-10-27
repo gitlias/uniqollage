@@ -26,6 +26,8 @@ interface TileBase extends Placement {
   source: Source;
   /** Per-tile text size multiplier on top of the global base size. */
   scale: number;
+  /** Extra growth from the "neat" layout (reset on every arrange). */
+  grow?: number;
 }
 
 /** Article heading: serif title, hairline rule, optional "From Wikipedia…" tagline. */
@@ -42,6 +44,14 @@ export interface TitleTile extends TileBase {
 export interface TextTile extends TileBase {
   type: 'text';
   markup: string;
+  /** Small gap-filling text added by the neat layout; regenerated on every arrange. */
+  filler?: boolean;
+}
+
+/** Spare sentence the neat layout can use to fill gaps. */
+export interface ReserveItem {
+  markup: string;
+  source: Source;
 }
 
 export interface ImageRef {
@@ -117,6 +127,10 @@ export interface Project {
   skin?: Skin;
   /** Posters only: landscape orientation. */
   landscape?: boolean;
+  /** 0 = rows spread over the height; up to 1 = close gaps by growing tiles and adding filler text. */
+  neat?: number;
+  /** Spare sentences for filler text (collected by random fill and article additions). */
+  reserve?: ReserveItem[];
   /** Spacing between tiles in mm; undefined = automatic (follows the text size). */
   gap?: number;
   /** Empty margin around the collage inside the print area / poster, mm (all products). */

@@ -14,6 +14,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 page.on('dialog', (d) => {
+  if (/Replace|ersetzen/.test(d.message())) return; // expected confirmation, accepted by the step
   errors.push(`dialog: ${d.message()}`);
   d.dismiss();
 });
@@ -333,6 +334,47 @@ await step('spacing and margin in the settings panel', async () => {
   await page.locator('.settings-panel label', { hasText: /Automatic spacing|Automatischer Abstand/ }).locator('input').check();
   await setRange(/^(Margin|Rand)/, 0);
   await closeSettings();
+});
+
+await step('random fill from a category', async () => {
+  await page.click('.toolbar button >> text=/Fill randomly|Zufällig füllen/');
+  await page.waitForSelector('.modal .fill-types');
+  await page.locator('.modal input[list=fill-categories]').fill('Bäume');
+  await page.waitForTimeout(400);
+  if (!(await page.locator('.modal input[type=checkbox] >> nth=1').isDisabled())) throw new Error('DYK should be disabled with a category');
+  await page.locator('.modal input[type=range]').fill('6');
+  await page.click('.modal button.primary');
+  await page.waitForFunction(() => !document.querySelector('.modal') || document.querySelector('.modal .msg'), null, { timeout: 60000 });
+  if (await page.locator('.modal').count()) await page.click('.modal button >> nth=-2');
+  const labels = await page.locator('.tile-list li').allTextContents();
+  // Random-article fixtures (Brillenkauz, Hallig) and DYK hooks must not appear.
+  if (!labels.length || labels.some((l) => /Brillenkauz|Hallig|Did you know|Schon gewusst/.test(l))) throw new Error(`unexpected tiles: ${labels.join(' | ')}`);
+});
+
+await step('neat layout closes gaps', async () => {
+  await page.click('.settings-toggle');
+  const neat = page.locator('.settings-panel label', { hasText: /^(Neat|Ordentlich)/ }).locator('input[type=range]');
+  await neat.evaluate((el) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '1');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForSelector('.settings-panel >> text=/Filler material|Füllmaterial/');
+  await page.click('.settings-toggle');
+  await page.screenshot({ path: `${out}/neat.png` });
+});
+
+await step('whole page from an article', async () => {
+  await page.click('.tabs button >> nth=0');
+  await page.fill('.header-search input', 'Ginkgo');
+  await page.keyboard.press('Enter');
+  await page.click('.hits li >> nth=0');
+  await page.waitForSelector('.wiki-title');
+  page.once('dialog', (d) => d.accept());
+  await page.click('button >> text=/Whole page|Ganze Seite/');
+  await page.waitForTimeout(500);
+  const titles = await page.locator('.tile-list li').allTextContents();
+  if (!titles.some((x) => /Ginkgo/.test(x)) || titles.length < 4) throw new Error(`whole page tiles: ${titles.join(' | ')}`);
+  await page.screenshot({ path: `${out}/whole-page.png` });
 });
 
 await step('snapping to the page edge (Alt moves freely)', async () => {

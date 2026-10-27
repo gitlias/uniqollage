@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { isNonStandardThumb, originalFromThumb } from './wiki/api';
-import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
+import { newId, type Lang, type Project, type ReserveItem, type Tile, type TileDraft } from './model';
 import { arrange, shuffled } from './layout/pack';
 import { contentBox } from './render/collage';
 import { areaOf, garmentColor, offerIn, productById, productsIn } from './products';
@@ -26,6 +26,7 @@ export function emptyProject(): Project {
 }
 
 const HISTORY = 100;
+const RESERVE_MAX = 400;
 
 /**
  * Make product, size and garment colour valid for the project's region,
@@ -77,6 +78,10 @@ interface State {
   undo(): void;
   redo(): void;
   addTiles(drafts: TileDraft[]): void;
+  /** Add spare sentences for the neat layout's filler text (deduplicated, capped). */
+  addReserve(items: ReserveItem[]): void;
+  /** Replace all tiles with already placed ones (one undo step, manual layout). */
+  setTiles(tiles: Tile[]): void;
   /** Add (or replace with) many tiles in one undo step and shuffle the layout. */
   fill(drafts: TileDraft[], replace: boolean): void;
   patchTile(id: string, patch: Partial<Tile>, history?: boolean): void;
@@ -109,7 +114,7 @@ function toTiles(project: Project, drafts: TileDraft[]): Tile[] {
 function relayout(p: Project, shuffle: boolean): Project {
   const seed = shuffle ? Math.floor(Math.random() * 2 ** 31) : p.seed;
   const order = shuffle ? shuffled(p.tiles, seed) : p.tiles;
-  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin, gap: p.gap });
+  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin, gap: p.gap, neat: p.neat, reserve: p.reserve });
   return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
 }
 
@@ -156,12 +161,30 @@ export const useStore = create<State>((set, get) => ({
     });
     set({ selected: tiles.length === 1 ? tiles[0].id : get().selected });
   },
+  addReserve(items) {
+    if (!items.length) return;
+    // No undo step: the reserve is invisible bookkeeping.
+    set((st) => {
+      const seen = new Set((st.project.reserve ?? []).map((r) => r.markup));
+      const fresh = items.filter((r) => !seen.has(r.markup) && seen.add(r.markup));
+      if (!fresh.length) return {};
+      return { project: { ...st.project, reserve: [...(st.project.reserve ?? []), ...fresh].slice(-RESERVE_MAX) } };
+    });
+  },
+  setTiles(tiles) {
+    get().update((p) => ({ ...p, tiles }));
+    set({ autoLayout: false, selected: null });
+  },
   fill(drafts, replace) {
     get().update((p) => relayout({ ...p, tiles: [...(replace ? [] : p.tiles), ...toTiles(p, drafts)] }, true));
     set({ autoLayout: true, selected: null });
   },
   patchTile(id, patch, history = true) {
-    get().update((p) => ({ ...p, tiles: p.tiles.map((t) => (t.id === id ? ({ ...t, ...patch } as Tile) : t)) }), history);
+    const extra: Partial<Tile> = {};
+    // A manually set scale replaces the automatic growth; edited filler text becomes a normal tile.
+    if ('scale' in patch && !('grow' in patch)) extra.grow = undefined;
+    if ('markup' in patch) (extra as { filler?: boolean }).filler = false;
+    get().update((p) => ({ ...p, tiles: p.tiles.map((t) => (t.id === id ? ({ ...t, ...extra, ...patch } as Tile) : t)) }), history);
     if ('x' in patch || 'y' in patch || 'w' in patch || 'rot' in patch) set({ autoLayout: false });
   },
   removeTile(id) {

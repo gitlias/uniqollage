@@ -206,6 +206,76 @@ export async function randomArticles(lang: Lang, n = 5): Promise<RandomArticle[]
   }));
 }
 
+/** Category names starting with `q` (without the "Category:" prefix). */
+export async function searchCategories(lang: Lang, q: string): Promise<string[]> {
+  const json = await api(lang, { action: 'query', list: 'prefixsearch', pssearch: q, psnamespace: 14, pslimit: 10 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((json.query?.prefixsearch ?? []) as any[]).map((p) => String(p.title).replace(/^[^:]+:/, ''));
+}
+
+async function categoryMembers(lang: Lang, category: string, type: 'page' | 'subcat'): Promise<string[]> {
+  const titles: string[] = [];
+  let cont: string | undefined;
+  do {
+    const json = await api(lang, {
+      action: 'query',
+      list: 'categorymembers',
+      cmtitle: `Category:${category}`,
+      cmtype: type,
+      cmnamespace: type === 'page' ? 0 : 14,
+      cmlimit: 500,
+      ...(cont ? { cmcontinue: cont } : {}),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const m of (json.query?.categorymembers ?? []) as any[]) titles.push(String(m.title));
+    cont = json.continue?.cmcontinue;
+  } while (cont && titles.length < 1500);
+  return titles;
+}
+
+/**
+ * Article titles in a category, plus those of up to `maxSub` of its
+ * subcategories when the category itself is small.
+ */
+export async function categoryArticles(lang: Lang, category: string, want = 100, maxSub = 8): Promise<string[]> {
+  const name = category.replace(/^(Category|Kategorie):/i, '').trim();
+  const pages = new Set(await categoryMembers(lang, name, 'page'));
+  if (pages.size < want) {
+    const subs = (await categoryMembers(lang, name, 'subcat')).slice(0, maxSub);
+    const lists = await Promise.all(subs.map((s) => categoryMembers(lang, s.replace(/^[^:]+:/, ''), 'page').catch(() => [] as string[])));
+    for (const l of lists) for (const t of l) pages.add(t);
+  }
+  return [...pages];
+}
+
+/** Summaries (extract, picture, description) for up to 20 titles – same shape as random articles. */
+export async function articleSummaries(lang: Lang, titles: string[]): Promise<RandomArticle[]> {
+  if (!titles.length) return [];
+  const json = await api(lang, {
+    action: 'query',
+    titles: titles.slice(0, 20).join('|'),
+    prop: 'extracts|pageimages|description',
+    exintro: 1,
+    explaintext: 1,
+    exsentences: 3,
+    exlimit: 20,
+    piprop: 'thumbnail|name',
+    pithumbsize: 500,
+    redirects: 1,
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((json.query?.pages ?? []) as any[])
+    .filter((p) => !p.missing)
+    .map((p) => ({
+      title: p.title,
+      extract: cleanText(p.extract ?? '').trim(),
+      description: p.description,
+      thumb: p.thumbnail?.source,
+      aspect: p.thumbnail?.width && p.thumbnail?.height ? p.thumbnail.width / p.thumbnail.height : undefined,
+      pageImage: p.pageimage,
+    }));
+}
+
 const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export function dykPage(lang: Lang, archive?: { year: number; month: number }): string {

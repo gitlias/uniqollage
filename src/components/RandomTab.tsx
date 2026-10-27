@@ -3,10 +3,11 @@ import type { Lang } from '../model';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { useT } from '../i18n';
-import { articleUrl, randomArticles, type RandomArticle } from '../wiki/api';
+import { articleUrl, loadArticle, randomArticles, type RandomArticle } from '../wiki/api';
 import { escapeText } from '../text/markup';
 import { AddButton, LangToggle, Status } from './common';
 import { cardDraft } from '../wiki/cards';
+import { placeWholePage } from './wholePage';
 
 /** Extract with the first occurrence of the title in bold, as in a Wikipedia lead. */
 function leadMarkup(a: RandomArticle): string {
@@ -74,6 +75,19 @@ export function RandomTab() {
               label={t('textOnly')}
               onAdd={() => addTiles([{ type: 'text', markup: leadMarkup(a), source: { kind: 'wikipedia', lang, title: a.title, url: articleUrl(lang, a.title) } }])}
             />
+            <button
+              className="add-like"
+              title={t('wholePageHint')}
+              onClick={async () => {
+                try {
+                  placeWholePage(await loadArticle(lang, a.title), t('confirmReplace'));
+                } catch (e) {
+                  alert(`${t('error')}: ${(e as Error).message}`);
+                }
+              }}
+            >
+              ▤ {t('wholePage')}
+            </button>
           </div>
         </div>
       ))}

@@ -115,6 +115,34 @@ export function handle(url) {
       },
     });
   }
+  // Category "Bäume" with one subcategory.
+  if (p.action === 'query' && p.list === 'prefixsearch') {
+    return json({ query: { prefixsearch: [{ title: 'Kategorie:Bäume' }, { title: 'Kategorie:Bäume nach Region' }] } });
+  }
+  if (p.action === 'query' && p.list === 'categorymembers') {
+    const cat = p.cmtitle.replace(/^[^:]+:/, '');
+    const members =
+      cat === 'Bäume'
+        ? p.cmtype === 'page'
+          ? ['Ginkgo', 'Eiche', 'Linde']
+          : ['Kategorie:Nadelbäume']
+        : cat === 'Nadelbäume' && p.cmtype === 'page'
+          ? ['Tanne', 'Fichte']
+          : [];
+    return json({ query: { categorymembers: members.map((title) => ({ title })) } });
+  }
+  if (p.action === 'query' && p.titles && String(p.prop).startsWith('extracts')) {
+    return json({
+      query: {
+        pages: p.titles.split('|').map((title, i) => ({
+          title,
+          extract: `${title} ist ein Baum, der in vielen Wäldern Europas vorkommt und sehr alt werden kann.`,
+          description: 'Baumart',
+          ...(i % 2 ? {} : { pageimage: 'Ginkgo_tree.jpg', thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}`, width: 500, height: 333 } }),
+        })),
+      },
+    });
+  }
   if (p.action === 'query' && p.prop === 'description') {
     return json({ query: { pages: [{ title: p.titles, description: 'Genus of plants' }] } });
   }

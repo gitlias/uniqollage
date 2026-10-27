@@ -599,7 +599,8 @@ main.content {
   color: #fff;
 }
 
-button.add {
+button.add,
+button.add-like {
   font-size: 12px;
   min-height: 26px;
   padding: 2px 8px;

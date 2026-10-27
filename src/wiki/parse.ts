@@ -141,6 +141,8 @@ export function funScore(markup: string): number {
 export interface Figure {
   /** File name without namespace, spaces not underscores. */
   file: string;
+  /** Section the figure appears in ('' = lead). */
+  section?: string;
   thumb: string;
   caption: string;
 }
@@ -157,8 +159,16 @@ export interface Sentence {
   score: number;
 }
 
+export interface Paragraph {
+  markup: string;
+  /** Section heading ('' for the lead). */
+  section: string;
+}
+
 export interface ParsedArticle {
   lead: string;
+  /** All body paragraphs in order (for the whole-page layout). */
+  paragraphs: Paragraph[];
   sentences: Sentence[];
   figures: Figure[];
   infobox?: Infobox;
@@ -240,6 +250,7 @@ export function parseArticle(html: string, lang: Lang): ParsedArticle {
 
   // Paragraphs, in document order, tracking the current section heading.
   const sentences: Sentence[] = [];
+  const paragraphs: Paragraph[] = [];
   let section = '';
   let lead = '';
   let skip = false;
@@ -256,12 +267,25 @@ export function parseArticle(html: string, lang: Lang): ParsedArticle {
     const m = tidy(htmlToMarkup(el));
     if (stripMarkup(m).length < 30) continue;
     if (!section && !lead) lead = m;
+    paragraphs.push({ markup: m, section });
     for (const s of splitSentences(m, lang)) {
       if (stripMarkup(s).length < 25) continue;
       sentences.push({ markup: s, section, score: funScore(s) });
     }
   }
-  return { lead, sentences, figures, infobox };
+  // Which section each figure belongs to (document order).
+  let current = '';
+  const sectionOf = new Map<string, string>();
+  for (const el of Array.from(root.querySelectorAll('h2, figure, div.thumb, li.gallerybox'))) {
+    if (el.tagName === 'H2') current = cleanText(el.textContent ?? '').trim();
+    else {
+      const link = el.querySelector('a.mw-file-description, a.image, a[href*=":"]');
+      const file = link ? fileFromHref(link.getAttribute('href') ?? '') : null;
+      if (file && !sectionOf.has(file)) sectionOf.set(file, current);
+    }
+  }
+  for (const f of figures) f.section = sectionOf.get(f.file) ?? '';
+  return { lead, paragraphs, sentences, figures, infobox };
 }
 
 /** "Did you know" / "Schon gewusst?" items as markup. */

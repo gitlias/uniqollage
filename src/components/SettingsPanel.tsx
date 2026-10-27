@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { randomFill } from '../wiki/randomFill';
 import { normalize, useStore, updateAndRelayout } from '../store';
 import { useUi } from '../ui';
 import { useT } from '../i18n';
@@ -39,6 +40,24 @@ export function SettingsPanel() {
       window.removeEventListener('pointerdown', onDown);
     };
   }, []);
+
+  const [loadingReserve, setLoadingReserve] = useState(false);
+  /** Fetch random facts as filler material, then re-run the layout. */
+  const loadReserve = async () => {
+    setLoadingReserve(true);
+    try {
+      const res = await randomFill({ types: ['fact'], count: 15, langs: [uiLang] });
+      s.addReserve([
+        ...res.reserve,
+        ...res.drafts.flatMap((d) => (d.type === 'text' ? [{ markup: d.markup, source: d.source }] : [])),
+      ]);
+      updateAndRelayout((x) => x);
+    } catch (e) {
+      alert(`${t('error')}: ${(e as Error).message}`);
+    } finally {
+      setLoadingReserve(false);
+    }
+  };
 
   /** Text size: re-run the layout only if it is automatic (keeps manual placements). */
   const layout = (fn: Parameters<typeof updateAndRelayout>[0]) => (autoLayout ? updateAndRelayout(fn) : s.update(fn));
@@ -186,6 +205,28 @@ export function SettingsPanel() {
           </span>
           <input type="range" min={0} max={maxMargin} step={1} value={p.margins ?? 0} onChange={(e) => updateAndRelayout((x) => ({ ...x, margins: Number(e.target.value) }))} />
         </label>
+        <label title={t('neatHint')}>
+          <span className="row spread">
+            {t('neat')}
+            <span className="muted small">{Math.round((p.neat ?? 0) * 100)} %</span>
+          </span>
+          <input type="range" min={0} max={1} step={0.05} value={p.neat ?? 0} onChange={(e) => updateAndRelayout((x) => ({ ...x, neat: Number(e.target.value) }))} />
+        </label>
+        {(p.neat ?? 0) > 0 && (
+          <div className="field">
+            <span className="muted small">
+              {t('reserve')}: {p.reserve?.length ?? 0} {t('sentences')}
+            </span>
+            <div className="row">
+              <button disabled={loadingReserve} onClick={loadReserve}>
+                {loadingReserve ? t('loading') : `+ ${t('reserveLoad')}`}
+              </button>
+              <button disabled={!p.reserve?.length} onClick={() => updateAndRelayout((x) => ({ ...x, reserve: [] }))}>
+                {t('reserveClear')}
+              </button>
+            </div>
+          </div>
+        )}
         <label className="check">
           <input type="checkbox" checked={p.credit} onChange={(e) => updateAndRelayout((x) => ({ ...x, credit: e.target.checked }))} /> {t('credit')}
         </label>

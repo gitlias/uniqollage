@@ -50,7 +50,8 @@ describe('parseArticle', () => {
     expect(a.infobox?.image).toMatchObject({ file: 'Ginkgo leaf.jpg', caption: 'A leaf' });
   });
   it('extracts figures with captions', () => {
-    expect(a.figures).toEqual([{ file: 'Tree.jpg', thumb: 'https://upload.wikimedia.org/thumb/220px-Tree.jpg', caption: 'An old [[tree]]' }]);
+    expect(a.figures).toEqual([{ file: 'Tree.jpg', thumb: 'https://upload.wikimedia.org/thumb/220px-Tree.jpg', caption: 'An old [[tree]]', section: '' }]);
+    expect(a.paragraphs.map((p) => p.section)).toEqual(['', 'History']);
   });
   it('extracts sentences with sections and skips references', () => {
     expect(a.sentences.map((s) => s.section)).toEqual(['', '', 'History']);

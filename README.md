@@ -28,6 +28,14 @@ files.
   tagline, body text with link-blue words, thumbnail frames with captions,
   infobox fragments. The editor UI itself follows the Vector 2022 skin /
   Codex design tokens.
+- **Neat mode** – close gaps and ragged column ends: tiles grow into free
+  space and leftover holes get small filler sentences (collected from the
+  articles you used).
+- **Whole page** – lay one article out like a Wikipedia page across the
+  canvas (infobox and pictures floating right, section headings), cut off
+  with "…" where the canvas ends.
+- **Random fill** with any mix of content types, 5–50 tiles, EN/DE, and an
+  optional Wikipedia category (incl. subcategories).
 - **Auto layout + manual tweaks** – seeded masonry packing that picks the
   largest text size that fills the print area, crops images to close holes;
   *Shuffle* for a new arrangement. Drag to move, resize from every edge and

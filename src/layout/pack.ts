@@ -1,4 +1,4 @@
-import type { Skin, Tile } from '../model';
+import { newId, type ReserveItem, type Skin, type Tile } from '../model';
 import { imageBoxWidth, tileHeight } from '../render/tiles';
 import { stripMarkup } from '../text/markup';
 import { font } from '../text/fonts';
@@ -46,6 +46,8 @@ interface Attempt {
   slots: Slot[];
   height: number;
   gap: number;
+  cols: number;
+  colW: number;
 }
 function spanFor(t: Tile, cols: number, colW: number, gap: number, b: number, r: number): number {
   let s: number;
@@ -112,7 +114,7 @@ function attempt(tiles: Tile[], area: Box, b: number, seed: number, skin: Skin, 
     for (let c = best; c < best + span; c++) heights[c] = y + h;
     slots.push({ tile: { ...t, x: area.x + best * (colW + gap), y, w, rot: 0 }, col: best, span, h });
   }
-  return { slots, height: Math.max(0, ...heights), gap };
+  return { slots, height: Math.max(0, ...heights), gap, cols, colW };
 }
 
 /** Largest body size at which this variant fits, with its layout. */
@@ -136,23 +138,128 @@ function fit(tiles: Tile[], area: Box, seed: number, skin: Skin, gap?: number): 
  * tile in its columns or the bottom) grows taller by cropping its picture,
  * like Wikipedia's fixed-size thumbnails do.
  */
-function fillHoles(res: Attempt, bottom: number, b: number, skin: Skin): void {
+/** How far down a slot may grow: the next tile in its columns, or `bottom`. */
+function limitBelow(res: Attempt, s: Slot, bottom: number): number {
+  let limit = bottom;
+  for (const o of res.slots) {
+    if (o === s || o.tile.y <= s.tile.y) continue;
+    if (o.col < s.col + s.span && s.col < o.col + o.span) limit = Math.min(limit, o.tile.y - res.gap);
+  }
+  return limit;
+}
+
+function fillHoles(res: Attempt, bottom: number, b: number, skin: Skin, maxGrow = 0.8): void {
   for (const s of res.slots) {
     const t = s.tile;
     if (t.type !== 'image') continue;
-    let limit = bottom;
-    for (const o of res.slots) {
-      if (o === s || o.tile.y <= t.y) continue;
-      if (o.col < s.col + s.span && s.col < o.col + o.span) limit = Math.min(limit, o.tile.y - res.gap);
-    }
-    const free = limit - (t.y + s.h);
+    const free = limitBelow(res, s, bottom) - (t.y + s.h);
     if (free < b * 0.5) continue;
     const iw = imageBoxWidth(t, b, skin);
     const ih = iw / t.image.aspect;
-    const grow = Math.min(free, ih * 0.8); // crop at most to ~55% of the original aspect
+    const grow = Math.min(free, ih * maxGrow); // default: crop at most to ~55% of the original aspect
     s.tile = { ...t, boxAspect: iw / (ih + grow) };
     s.h += grow;
   }
+}
+
+/** Largest value in [lo, hi] for which `ok` holds (ok is monotone: true then false). */
+function maxWhere(lo: number, hi: number, ok: (v: number) => boolean, steps = 10): number | null {
+  if (!ok(lo)) return null;
+  if (ok(hi)) return hi;
+  for (let i = 0; i < steps; i++) {
+    const mid = (lo + hi) / 2;
+    if (ok(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+const FILLER_SCALE = [0.5, 0.85] as const;
+
+/**
+ * "Neat" pass: tiles grow into the free space below them (images crop
+ * taller, text-like tiles get slightly larger text) so columns end flush with
+ * the bottom; remaining holes get small filler sentences from `reserve`.
+ */
+function neaten(res: Attempt, area: Box, b: number, skin: Skin, neat: number, reserve: ReserveItem[], seed: number): Tile[] {
+  const bottom = area.h;
+  const height = (t: Tile) => tileHeight(t, t.w, b, skin);
+  fillHoles(res, bottom, b, skin, 0.8 + neat * 1.2);
+  const maxGrow = 1 + neat * 0.3; // keep text sizes fairly even; fillers do the rest
+  for (const s of res.slots) {
+    if (s.tile.type === 'image') continue;
+    const target = limitBelow(res, s, bottom) - s.tile.y;
+    if (target - s.h < b * 0.3) continue;
+    const g = maxWhere(1, maxGrow, (v) => height({ ...s.tile, grow: v } as Tile) <= target);
+    if (g && g > 1.001) {
+      s.tile = { ...s.tile, grow: g } as Tile;
+      s.h = height(s.tile);
+    }
+  }
+
+  // Free intervals per column, merged across neighbouring columns.
+  const minHole = b * 1.4;
+  type Hole = { c0: number; c1: number; top: number; bottom: number };
+  const holes: Hole[] = [];
+  for (let c = 0; c < res.cols; c++) {
+    const occupied = res.slots
+      .filter((s) => s.col <= c && c < s.col + s.span)
+      .map((s) => [s.tile.y, s.tile.y + s.h] as const)
+      .sort((p, q) => p[0] - q[0]);
+    let cursor = 0;
+    let first = true;
+    for (const [top, end] of [...occupied, [bottom + res.gap, bottom + res.gap] as const]) {
+      const from = first ? cursor : cursor + res.gap;
+      const to = top - res.gap;
+      if (to - from >= minHole) {
+        const same = holes.find((h) => h.c1 === c - 1 && Math.abs(h.top - from) < 0.5 && Math.abs(h.bottom - to) < 0.5);
+        if (same) same.c1 = c;
+        else holes.push({ c0: c, c1: c, top: from, bottom: to });
+      }
+      cursor = Math.max(cursor, end);
+      first = false;
+    }
+  }
+
+  const used = new Set(res.slots.map((s) => (s.tile.type === 'text' ? s.tile.markup : '')));
+  const pool = reserve.filter((r) => !used.has(r.markup));
+  const r = rng(seed + 101);
+  const fillers: Tile[] = [];
+  for (const hole of holes) {
+    const w = (hole.c1 - hole.c0 + 1) * res.colW + (hole.c1 - hole.c0) * res.gap;
+    let y = hole.top;
+    while (hole.bottom - y >= minHole && pool.length) {
+      const avail = hole.bottom - y;
+      let best: { i: number; scale: number; h: number } | null = null;
+      // Try a random sample of spare sentences; keep the one that fills the space best.
+      const start = Math.floor(r() * pool.length);
+      for (let k = 0; k < Math.min(pool.length, 40); k++) {
+        const i = (start + k) % pool.length;
+        const base = { id: '', type: 'text', markup: pool[i].markup, source: pool[i].source, x: 0, y: 0, w, rot: 0, scale: 1 } as Tile;
+        const sc = maxWhere(FILLER_SCALE[0], FILLER_SCALE[1], (v) => height({ ...base, scale: v } as Tile) <= avail, 7);
+        if (sc === null) continue;
+        const h = height({ ...base, scale: sc } as Tile);
+        if (!best || h > best.h) best = { i, scale: sc, h };
+        if (h > avail * 0.9) break;
+      }
+      if (!best) break;
+      const item = pool.splice(best.i, 1)[0];
+      fillers.push({
+        id: newId(),
+        type: 'text',
+        markup: item.markup,
+        source: item.source,
+        filler: true,
+        x: area.x + hole.c0 * (res.colW + res.gap),
+        y: area.y + y,
+        w,
+        rot: 0,
+        scale: best.scale,
+      });
+      y += best.h + res.gap;
+    }
+  }
+  return fillers;
 }
 
 export interface ArrangeResult {
@@ -171,12 +278,25 @@ const VARIANTS = 6;
 export function arrange(
   tiles: Tile[],
   area: Box,
-  opts: { baseSize: number; autoSize: boolean; seed: number; skin?: Skin; /** Fixed spacing in mm; default follows the text size. */ gap?: number },
+  opts: {
+    baseSize: number;
+    autoSize: boolean;
+    seed: number;
+    skin?: Skin;
+    /** Fixed spacing in mm; default follows the text size. */
+    gap?: number;
+    /** 0–1, see `neaten`. */
+    neat?: number;
+    reserve?: ReserveItem[];
+  },
 ): ArrangeResult {
   const skin = opts.skin ?? 'vector2010';
-  if (!tiles.length) return { tiles, baseSize: opts.baseSize, overflow: false };
-  // Start from uncropped images so repeated arranging does not accumulate crops.
-  const clean = tiles.map((t) => (t.type === 'image' && t.boxAspect ? { ...t, boxAspect: undefined } : t));
+  const neat = opts.neat ?? 0;
+  // Fillers are regenerated; earlier crops and growth are undone so repeated arranging does not accumulate them.
+  const clean = tiles
+    .filter((t) => !(t.type === 'text' && t.filler))
+    .map((t) => (t.grow || (t.type === 'image' && t.boxAspect) ? ({ ...t, grow: undefined, ...(t.type === 'image' ? { boxAspect: undefined } : {}) } as Tile) : t));
+  if (!clean.length) return { tiles: clean, baseSize: opts.baseSize, overflow: false };
   let b = opts.baseSize;
   let res: Attempt | null = null;
   if (opts.autoSize) {
@@ -192,6 +312,11 @@ export function arrange(
   }
   res ??= attempt(clean, area, b, opts.seed, skin, opts.gap);
   const overflow = res.height > area.h + 1e-6;
+  if (neat > 0 && !overflow) {
+    const fillers = neaten(res, area, b, skin, neat, opts.reserve ?? [], opts.seed);
+    const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y }));
+    return { tiles: [...out, ...fillers], baseSize: Math.round(b * 1000) / 1000, overflow };
+  }
   fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
   // scaling y by k ≥ 1 keeps every gap at least as large as before).

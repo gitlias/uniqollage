@@ -7,6 +7,7 @@ import { loadArticle, searchArticles, type Article, type SearchHit } from '../wi
 import type { Figure } from '../wiki/parse';
 import { AddButton, LangToggle, Markup, Status, measureAspect } from './common';
 import { cardDraft } from '../wiki/cards';
+import { placeWholePage } from './wholePage';
 
 export function ArticleTab() {
   const t = useT();
@@ -93,7 +94,17 @@ export function ArticleTab() {
 
 function ArticleView({ article: a, onBack, loading }: { article: Article; onBack: () => void; loading: boolean }) {
   const t = useT();
-  const addTiles = useStore((s) => s.addTiles);
+  const storeAdd = useStore((s) => s.addTiles);
+  // Taking something from an article also keeps its best sentences as filler material.
+  const addTiles = (drafts: Parameters<typeof storeAdd>[0]) => {
+    useStore.getState().addReserve(
+      [...a.sentences]
+        .sort((x, y) => y.score - x.score)
+        .slice(0, 20)
+        .map((s) => ({ markup: s.markup, source: { kind: 'wikipedia' as const, lang: a.lang, title: a.title, url: a.url } })),
+    );
+    return storeAdd(drafts);
+  };
   const source: Source = { kind: 'wikipedia', lang: a.lang, title: a.title, url: a.url };
   const sentences = [...a.sentences].sort((x, y) => y.score - x.score);
 
@@ -125,6 +136,9 @@ function ArticleView({ article: a, onBack, loading }: { article: Article; onBack
         <div className="row">
           <AddButton label={t('addTitle')} onAdd={() => addTiles([{ type: 'title', text: a.title, tagline: false, source }])} />
           <AddButton label={`${t('addTitle')} + tagline`} onAdd={() => addTiles([{ type: 'title', text: a.title, tagline: true, source }])} />
+          <button className="add-like" title={t('wholePageHint')} onClick={() => placeWholePage(a, t('confirmReplace'))}>
+            ▤ {t('wholePage')}
+          </button>
           <span title={t('addCardHint')}>
             <AddButton
               label={t('addCard')}

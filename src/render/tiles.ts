@@ -138,7 +138,7 @@ function frameGeometry(style: ImageStyle, b: number): FrameGeometry {
 
 /** Width of the picture inside an image tile. */
 export function imageBoxWidth(t: ImageTile, baseSize: number, s: Skin = 'vector2010'): number {
-  const g = frameGeometry(imageStyleOf(t, s), baseSize * t.scale);
+  const g = frameGeometry(imageStyleOf(t, s), baseSize * t.scale * (t.grow ?? 1));
   return t.w - 2 * (g.pad + g.sw);
 }
 
@@ -291,7 +291,7 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
 const cache = new WeakMap<Tile, { b: number; theme: Theme; skin: Skin; epoch: number; r: Rendered }>();
 
 export function renderTile(t: Tile, baseSize: number, theme: Theme = 'light', sk: Skin = 'vector2010'): Rendered {
-  const b = baseSize * t.scale;
+  const b = baseSize * t.scale * (t.grow ?? 1);
   const hit = cache.get(t);
   const epoch = fontEpoch();
   if (hit && hit.b === b && hit.theme === theme && hit.skin === sk && hit.epoch === epoch) return hit.r;

@@ -120,3 +120,37 @@ describe('fixed spacing', () => {
     expect(minV).toBeGreaterThanOrEqual(6 - 0.01);
   });
 });
+
+describe('neat layout', () => {
+  const words = 'ginkgo tree leaf autumn seed temple garden fossil species ancient yellow fan shaped survivor city street'.split(' ');
+  const reserve = Array.from({ length: 60 }, (_, i) => ({
+    markup: Array.from({ length: 8 + (i % 17) }, (_, j) => words[(i * 7 + j * 3) % words.length]).join(' ') + '.',
+    source: { kind: 'wikipedia' as const },
+  }));
+  const area = { x: 0, y: 0, w: 250, h: 320 };
+  const columnBottoms = (tiles: Tile[], b: number) => {
+    const xs = [...new Set(tiles.map((t) => Math.round(t.x)))];
+    return xs.map((x) => Math.max(...tiles.filter((t) => Math.round(t.x) <= x && x < t.x + t.w - 1).map((t) => t.y + renderTile(t, b).h)));
+  };
+
+  it('ends every column flush at the bottom (fillers + growth), without overlaps', () => {
+    const loose = arrange(sample(14), area, { baseSize: 3, autoSize: false, seed: 9, gap: 4 });
+    const neat = arrange(sample(14), area, { baseSize: 3, autoSize: false, seed: 9, gap: 4, neat: 1, reserve });
+    const spread = (bs: number[]) => Math.max(...bs) - Math.min(...bs);
+    expect(spread(columnBottoms(loose.tiles, 3))).toBeGreaterThan(10);
+    const bottoms = columnBottoms(neat.tiles, 3);
+    for (const bt of bottoms) expect(bt).toBeGreaterThan(area.h - 3 * 1.4 - 4 - 1);
+    expect(neat.tiles.some((t) => t.type === 'text' && t.filler)).toBe(true);
+    const boxes = neat.tiles.map((t) => ({ x: t.x, y: t.y, w: t.w, h: renderTile(t, 3).h }));
+    for (const b of boxes) expect(b.y + b.h).toBeLessThanOrEqual(area.h + 1e-6);
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j]), `${i}/${j}`).toBe(false);
+  });
+
+  it('does not accumulate growth or fillers when arranging again', () => {
+    const first = arrange(sample(10), area, { baseSize: 3, autoSize: false, seed: 2, neat: 1, reserve });
+    const again = arrange(first.tiles, area, { baseSize: 3, autoSize: false, seed: 2, neat: 1, reserve });
+    expect(again.tiles.length).toBe(first.tiles.length);
+    const growth = (ts: Tile[]) => ts.reduce((s, t) => s + (t.grow ?? 1), 0);
+    expect(growth(again.tiles)).toBeCloseTo(growth(first.tiles), 6);
+  });
+});
