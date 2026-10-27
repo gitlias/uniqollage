@@ -1,6 +1,6 @@
-import { useStore, updateAndRelayout } from '../store';
+import { normalize, useStore, updateAndRelayout } from '../store';
 import { useT } from '../i18n';
-import { garmentColor, productById, PRODUCTS } from '../products';
+import { garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
 
 export function Toolbar() {
   const t = useT();
@@ -11,6 +11,8 @@ export function Toolbar() {
   const autoLayout = useStore((s) => s.autoLayout);
   const s = useStore.getState();
   const product = productById(p.productId);
+  const offer = offerIn(product, p.region);
+  const size = offer.sizes.find((x) => x.id === p.sizeId);
 
   const setSize = (baseSize: number) => {
     if (autoLayout) updateAndRelayout((x) => ({ ...x, baseSize, autoSize: false }));
@@ -21,39 +23,49 @@ export function Toolbar() {
     <div className="toolbar">
       <div className="group">
         <label>
+          {t('region')}
+          <select value={p.region} onChange={(e) => updateAndRelayout((x) => normalize({ ...x, region: e.target.value as Region }))}>
+            {REGIONS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name[uiLang]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           {t('product')}
           <select
             value={product.id}
             onChange={(e) => {
               const next = productById(e.target.value);
-              updateAndRelayout((x) => {
-                const garment = next.colors.includes(x.garment) ? x.garment : next.colors[0];
-                return { ...x, productId: next.id, sizeId: next.defaultSize, garment, theme: garmentColor(garment).dark ? 'dark' : 'light' };
-              });
+              updateAndRelayout((x) => normalize({ ...x, productId: next.id, sizeId: next.defaultSize }));
             }}
           >
-            {PRODUCTS.map((pr) => (
+            {productsIn(p.region).map((pr) => (
               <option key={pr.id} value={pr.id}>
                 {pr.name[uiLang]}
+                {offerIn(pr, p.region).price ? ` · ${offerIn(pr, p.region).price}` : ''}
               </option>
             ))}
           </select>
         </label>
-        {product.sizes.length > 1 && (
-          <label>
+        {offer.sizes.length > 1 && (
+          <label title={size?.estimated ? t('estimated') : undefined}>
             {t('size')}
             <select value={p.sizeId} onChange={(e) => updateAndRelayout((x) => ({ ...x, sizeId: e.target.value }))}>
-              {product.sizes.map((sz) => (
+              {offer.sizes.map((sz) => (
                 <option key={sz.id} value={sz.id}>
-                  {sz.id} · {sz.w / 10}×{sz.h / 10} cm
+                  {sz.id} · {sz.estimated ? '≈ ' : ''}
+                  {sz.w / 10}×{sz.h / 10} cm
                 </option>
               ))}
             </select>
+            {size?.estimated && <span className="estimated">≈</span>}
           </label>
         )}
-        {product.sizes.length === 1 && product.id !== 'custom' && (
+        {offer.sizes.length === 1 && product.id !== 'custom' && (
           <span className="muted small">
-            {product.sizes[0].w / 10}×{product.sizes[0].h / 10} cm
+            {offer.sizes[0].w / 10}×{offer.sizes[0].h / 10} cm
           </span>
         )}
         {p.productId === 'custom' && (
@@ -113,7 +125,7 @@ export function Toolbar() {
       <div className="group">
         <span className="muted">{t('garment')}</span>
         <div className="swatches">
-          {product.colors.map((id) => {
+          {offer.colors.map((id) => {
             const g = garmentColor(id);
             return (
               <button

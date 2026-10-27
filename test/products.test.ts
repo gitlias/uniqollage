@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { exportPixels, printArea, productById, PRODUCTS, sizeOf, UPLOAD_TARGETS } from '../src/products';
-import { emptyProject, migrate } from '../src/store';
+import { exportPixels, offerIn, printArea, productById, productsIn, PRODUCTS, sizeOf, UPLOAD_TARGETS } from '../src/products';
+import { emptyProject, migrate, normalize } from '../src/store';
 import type { Project } from '../src/model';
 
 describe('products', () => {
@@ -33,10 +33,31 @@ describe('products', () => {
     const old = { ...emptyProject(), productId: 'tshirt-chest', garment: 'navy' } as Project;
     delete (old as Partial<Project>).sizeId;
     delete (old as Partial<Project>).theme;
+    delete (old as Partial<Project>).region;
     const m = migrate(old);
+    expect(m.region).toBe('de');
     expect(m.productId).toBe('basic-t');
     expect(m.sizeId).toBe('M');
     expect(m.theme).toBe('light');
-    expect(productById(m.productId).colors).toContain(m.garment);
+    expect(m.garment).toBe('white');
+  });
+});
+
+describe('regions', () => {
+  it('offers exactly the German UTme! line-up', () => {
+    expect(productsIn('de').map((p) => p.id)).toEqual(['basic-t', 'kids-t', 'tote', 'mini-tote', 'custom']);
+    const tee = offerIn(productById('basic-t'), 'de');
+    expect(tee.sizes.map((s) => s.id)).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']);
+    expect(tee.colors).toEqual(['white']);
+    expect(tee.price).toBe('19,90 €');
+    expect(offerIn(productById('kids-t'), 'de').sizes.map((s) => s.id)).toEqual(['110', '120', '130', '140', '150', '160']);
+    expect(sizeOf('basic-t', '3XL').estimated).toBe(true);
+    expect(sizeOf('basic-t', 'M').estimated).toBeUndefined();
+  });
+  it('keeps Japanese-only items and sizes out of Germany', () => {
+    const jp = { ...emptyProject(), region: 'jp' as const, productId: 'sweat', sizeId: 'L', garment: 'black', theme: 'dark' as const };
+    const de = normalize({ ...jp, region: 'de' });
+    expect(de).toMatchObject({ productId: 'basic-t', sizeId: 'L', garment: 'white', theme: 'light' });
+    expect(normalize({ ...emptyProject(), region: 'jp', sizeId: '3XL' }).sizeId).toBe('M');
   });
 });

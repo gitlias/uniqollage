@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
 import { arrange, shuffled } from './layout/pack';
 import { contentBox } from './render/collage';
-import { printArea, productById, sizeOf } from './products';
+import { garmentColor, offerIn, printArea, productById, productsIn } from './products';
 
 export function emptyProject(): Project {
   return {
     version: 1,
+    region: 'de',
     productId: 'basic-t',
     sizeId: 'M',
     theme: 'light',
@@ -22,17 +23,24 @@ export function emptyProject(): Project {
 
 const HISTORY = 100;
 
+/**
+ * Make product, size and garment colour valid for the project's region,
+ * keeping the current choice where possible.
+ */
+export function normalize(p: Project): Project {
+  const available = productsIn(p.region);
+  const product = available.find((x) => x.id === productById(p.productId).id) ?? available[0];
+  const offer = offerIn(product, p.region);
+  const size =
+    offer.sizes.find((s) => s.id === p.sizeId) ?? offer.sizes.find((s) => s.id === product.defaultSize) ?? offer.sizes[Math.floor(offer.sizes.length / 2)];
+  const garment = offer.colors.includes(p.garment) ? p.garment : offer.colors[0];
+  const theme = garment === p.garment ? p.theme : garmentColor(garment).dark ? 'dark' : 'light';
+  return { ...p, productId: product.id, sizeId: size.id, garment, theme };
+}
+
 /** Fill in fields added after a project was saved and map legacy product ids. */
 export function migrate(p: Project): Project {
-  const product = productById(p.productId);
-  return {
-    ...emptyProject(),
-    ...p,
-    productId: product.id,
-    sizeId: sizeOf(product.id, p.sizeId).id,
-    theme: p.theme ?? 'light',
-    garment: product.colors.includes(p.garment) ? p.garment : product.colors[0],
-  };
+  return normalize({ ...emptyProject(), ...p, theme: p.theme ?? 'light' });
 }
 
 interface State {

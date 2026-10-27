@@ -14,6 +14,25 @@
 
 export type Shape = 'tee' | 'oversized' | 'sweat' | 'tote' | 'mini-tote' | 'none';
 
+/**
+ * UTme! regions. The German stores (Berlin, Köln, Hamburg, Frankfurt) sell
+ * only four items: adult T-shirt (white, XXS–3XL, 19.90 €), kids T-shirt
+ * (white, 110–160, 12.90 €), tote (off white, 24.90 €) and mini tote
+ * (off white, 19.90 €) – per uniqlo.com/de UTme! "Preise & Verfügbarkeit".
+ */
+export type Region = 'de' | 'jp';
+
+export const REGIONS: { id: Region; name: { en: string; de: string } }[] = [
+  { id: 'de', name: { en: 'Germany', de: 'Deutschland' } },
+  { id: 'jp', name: { en: 'Japan', de: 'Japan' } },
+];
+
+export interface Availability {
+  sizes?: string[];
+  colors?: string[];
+  price?: string;
+}
+
 export interface SizeSpec {
   id: string;
   /** Print area in mm. */
@@ -23,6 +42,8 @@ export interface SizeSpec {
   top: number;
   /** Garment: length, shoulder width, body width (flat), mm. Bags: width, height. */
   garment: { length: number; shoulder?: number; width: number };
+  /** Not in the official table; extrapolated from the neighbouring size. */
+  estimated?: boolean;
 }
 
 export interface Product {
@@ -32,6 +53,8 @@ export interface Product {
   colors: string[];
   sizes: SizeSpec[];
   defaultSize: string;
+  /** Where the product is sold, with region-specific sizes/colours/price. */
+  regions: Partial<Record<Region, Availability>>;
 }
 
 type Row = [id: string, w: number, h: number, top: number, length: number, shoulder: number, width: number];
@@ -41,18 +64,26 @@ const sizes = (rows: Row[]): SizeSpec[] =>
 export const PRODUCTS: Product[] = [
   {
     id: 'basic-t',
-    name: { en: 'Basic T-shirt', de: 'Basic T-Shirt' },
+    name: { en: 'T-shirt (adults)', de: 'T-Shirt (Erwachsene)' },
     shape: 'tee',
     colors: ['white', 'black'],
     defaultSize: 'M',
+    regions: {
+      de: { sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], colors: ['white'], price: '19,90 €' },
+      jp: { sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'], price: '¥1,990–2,990' },
+    },
     sizes: sizes([
+      // XXS and 3XL are sold in Germany but missing from the official table:
+      // XXS uses the XS print area, 3XL the XXL one; garment sizes extrapolated.
+      ['XXS', 270, 308, 40, 610, 405, 430],
       ['XS', 270, 308, 40, 630, 420, 460],
       ['S', 290, 331, 40, 650, 435, 490],
       ['M', 310, 354, 40, 680, 450, 520],
       ['L', 330, 373, 40, 710, 465, 550],
       ['XL', 330, 373, 40, 740, 485, 590],
       ['XXL', 350, 400, 50, 765, 505, 630],
-    ]),
+      ['3XL', 350, 400, 50, 790, 525, 670],
+    ]).map((s) => (s.id === 'XXS' || s.id === '3XL' ? { ...s, estimated: true } : s)),
   },
   {
     id: 'u-crew',
@@ -60,6 +91,7 @@ export const PRODUCTS: Product[] = [
     shape: 'tee',
     colors: ['white'],
     defaultSize: 'M',
+    regions: { jp: { price: '¥2,490' } },
     sizes: sizes([
       ['S', 290, 331, 70, 660, 450, 500],
       ['M', 310, 354, 70, 690, 465, 530],
@@ -74,6 +106,7 @@ export const PRODUCTS: Product[] = [
     shape: 'oversized',
     colors: ['white'],
     defaultSize: 'M',
+    regions: { jp: { price: '¥2,990' } },
     sizes: sizes([
       ['S', 290, 331, 40, 660, 510, 525],
       ['M', 310, 354, 40, 690, 525, 555],
@@ -84,10 +117,14 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 'kids-t',
-    name: { en: 'Kids Basic T-shirt', de: 'Kinder Basic T-Shirt' },
+    name: { en: 'T-shirt (kids)', de: 'T-Shirt (Kinder)' },
     shape: 'tee',
     colors: ['white'],
     defaultSize: '130',
+    regions: {
+      de: { sizes: ['110', '120', '130', '140', '150', '160'], price: '12,90 €' },
+      jp: { price: '¥1,500' },
+    },
     sizes: sizes([
       ['100', 213, 240, 32, 420, 330, 340],
       ['110', 235, 265, 32, 450, 345, 360],
@@ -104,6 +141,7 @@ export const PRODUCTS: Product[] = [
     shape: 'sweat',
     colors: ['offwhite', 'black'],
     defaultSize: 'M',
+    regions: { jp: { price: '¥3,990–4,990' } },
     sizes: sizes([
       ['S', 290, 331, 90, 620, 475, 535],
       ['M', 310, 354, 90, 650, 490, 565],
@@ -118,14 +156,16 @@ export const PRODUCTS: Product[] = [
     shape: 'tote',
     colors: ['offwhite'],
     defaultSize: 'F',
+    regions: { de: { price: '24,90 €' }, jp: { price: '¥2,490' } },
     sizes: [{ id: 'F', w: 265, h: 298, top: 60, garment: { width: 390, length: 410 } }],
   },
   {
     id: 'mini-tote',
-    name: { en: 'Mini tote bag', de: 'Mini-Tragetasche' },
+    name: { en: 'Mini tote bag', de: 'Mini Tragetasche' },
     shape: 'mini-tote',
     colors: ['offwhite'],
     defaultSize: 'F',
+    regions: { de: { price: '19,90 €' }, jp: { price: '¥1,990' } },
     sizes: [{ id: 'F', w: 125, h: 140, top: 40, garment: { width: 350, length: 215 } }],
   },
   {
@@ -134,6 +174,7 @@ export const PRODUCTS: Product[] = [
     shape: 'none',
     colors: ['white', 'offwhite', 'black'],
     defaultSize: 'F',
+    regions: { de: {}, jp: {} },
     sizes: [{ id: 'F', w: 250, h: 320, top: 0, garment: { width: 0, length: 0 } }],
   },
 ];
@@ -144,6 +185,20 @@ const LEGACY: Record<string, string> = {
   'tshirt-square': 'basic-t',
   'tshirt-chest': 'basic-t',
 };
+
+export function productsIn(region: Region): Product[] {
+  return PRODUCTS.filter((p) => p.regions[region]);
+}
+
+/** Sizes, colours and price of a product as sold in a region. */
+export function offerIn(p: Product, region: Region): { sizes: SizeSpec[]; colors: string[]; price?: string } {
+  const a = p.regions[region] ?? {};
+  return {
+    sizes: a.sizes ? p.sizes.filter((s) => a.sizes!.includes(s.id)) : p.sizes,
+    colors: a.colors ?? p.colors,
+    price: a.price,
+  };
+}
 
 export function productById(id: string): Product {
   return PRODUCTS.find((p) => p.id === id) ?? PRODUCTS.find((p) => p.id === LEGACY[id]) ?? PRODUCTS[0];

@@ -56,6 +56,24 @@ Other regions: the Philippines FAQ documents 2048 × 2048 px, transparent PNG,
 Straße), Hamburg (Alter Wall) and Frankfurt (Biebergasse); EU FAQs (e.g. Sweden)
 list adult T, kids T, tote and mini tote, front only, without file specs.
 
+## Availability in Germany
+
+Source: uniqlo.com/de UTme! page, section "Preise & Verfügbarkeit" (Berlin
+Tauentzienstraße, Köln Hohe Straße, Hamburg Alter Wall, Frankfurt Biebergasse).
+
+| Item | Price | Colour | Sizes |
+|---|---|---|---|
+| T-Shirt (Erwachsene) | 19,90 € | Weiß | XXS – 3XL |
+| T-Shirt (Kinder) | 12,90 € | Weiß | 110 – 160 |
+| Tragetasche | 24,90 € | Off White | Onesize |
+| Mini Tragetasche | 19,90 € | Off White | Onesize |
+
+XXS and 3XL are not in the Japanese print-area table. The app uses the XS
+area (270 × 308 mm) for XXS and the XXL area (350 × 400 mm) for 3XL, marks
+them as estimates (≈) and asks users to check in store. German stores do not
+document upload limits, so the app defaults to the stricter 2048 × 2048 px /
+2 MB export there.
+
 ## Garments (official, cm)
 
 Source: <https://utme.uniqlo.com/itemlineup/>

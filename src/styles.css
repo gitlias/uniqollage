@@ -847,3 +847,7 @@ button.add {
   background: #fdf2d5;
   border-color: #ac6600;
 }
+.estimated {
+  color: #ac6600;
+  font-weight: 700;
+}

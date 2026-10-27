@@ -110,26 +110,35 @@ await step('undo/redo', async () => {
 });
 
 await step('mockups', async () => {
+  const region = '.toolbar select >> nth=0';
+  const product = '.toolbar select >> nth=1';
+  const size = '.toolbar select >> nth=2';
   await page.click('.page-tabs button >> text=Preview on product');
   await page.screenshot({ path: `${out}/mockup-tshirt.png` });
-  await page.selectOption('.toolbar select >> nth=0', 'sweat');
-  await page.selectOption('.toolbar select >> nth=1', 'L');
+  const deProducts = await page.locator('.toolbar select').nth(1).locator('option').allTextContents();
+  if (deProducts.length !== 5 || deProducts.some((x) => /Sweat|AIRism|U Crew/.test(x))) throw new Error(`DE products: ${deProducts}`);
+  await page.selectOption(size, '3XL');
+  await page.waitForSelector('.toolbar .estimated');
+  await page.selectOption(region, 'jp');
+  await page.selectOption(product, 'sweat');
+  await page.selectOption(size, 'L');
   await page.click('.swatch[title=Black]');
   if (!(await page.isChecked('.toolbar input[type=checkbox] >> nth=-1'))) throw new Error('night mode not enabled for black');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-sweat-black.png` });
-  await page.selectOption('.toolbar select >> nth=0', 'tote');
+  await page.selectOption(product, 'airism-oversized');
+  await page.screenshot({ path: `${out}/mockup-oversized.png` });
+  await page.selectOption(region, 'de');
+  await page.selectOption(product, 'tote');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-tote.png` });
-  await page.selectOption('.toolbar select >> nth=0', 'mini-tote');
+  await page.selectOption(product, 'mini-tote');
   await page.screenshot({ path: `${out}/mockup-mini.png` });
-  await page.selectOption('.toolbar select >> nth=0', 'airism-oversized');
-  await page.screenshot({ path: `${out}/mockup-oversized.png` });
-  await page.selectOption('.toolbar select >> nth=0', 'basic-t');
-  await page.click('.swatch[title=Black]');
+  await page.selectOption(product, 'kids-t');
+  await page.screenshot({ path: `${out}/mockup-kids.png` });
+  await page.selectOption(product, 'basic-t');
+  await page.selectOption(size, 'M');
   await page.click('.page-tabs button >> text=Edit');
-  await page.screenshot({ path: `${out}/editor-dark.png` });
-  await page.click('.swatch[title=White]');
 });
 
 await step('exports', async () => {

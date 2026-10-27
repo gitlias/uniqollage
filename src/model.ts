@@ -80,6 +80,8 @@ export type Theme = 'light' | 'dark';
 
 export interface Project {
   version: 1;
+  /** UTme! region whose products/sizes are offered (see products.ts). */
+  region: 'de' | 'jp';
   productId: string;
   /** Garment size (print areas differ per size). */
   sizeId: string;

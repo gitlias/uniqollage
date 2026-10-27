@@ -30,9 +30,10 @@ files.
   largest text size that fills the print area, crops images to close holes;
   *Shuffle* for a new arrangement. Drag to move, handles to resize/rotate,
   per-tile text scale, undo/redo, keyboard shortcuts.
-- **UTme! products with official print areas per size** – Basic T, U Crew
-  Neck T, AIRism Cotton Oversized T, Kids Basic T, Sweatshirt, tote and mini
-  tote (see [docs/utme-research.md](docs/utme-research.md)), plus custom sizes.
+- **UTme! products with official print areas per size**, filtered by region:
+  *Germany* (T-shirt adults XXS–3XL, T-shirt kids 110–160, tote, mini tote –
+  white/off white, with prices) or *Japan* (adds U Crew Neck T, AIRism
+  oversized T, sweatshirt, black). See [docs/utme-research.md](docs/utme-research.md).
 - **Export** – transparent PNG sized to the UTme! upload limits
   (2048 × 2304 px Japan, 2048 × 2048 px other regions, or 300 dpi), with a
   file-size check and protection against UTme! dropping pure white; vector

@@ -14,7 +14,9 @@ export function ExportDialog() {
   const p = useStore((s) => s.project);
   const uiLang = useStore((s) => s.uiLang);
   const close = () => useUi.getState().setExportOpen(false);
-  const [target, setTarget] = useState<UploadTargetId>('utme-jp');
+  // German stores do not document upload limits; the stricter international
+  // limit (2048×2048 px, 2 MB) is safe everywhere.
+  const [target, setTarget] = useState<UploadTargetId>(p.region === 'jp' ? 'utme-jp' : 'utme-intl');
   const [transparent, setTransparent] = useState(true);
   const [keepWhite, setKeepWhite] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export function ExportDialog() {
           {product.id !== 'custom' && product.sizes.length > 1 ? ` ${size.id}` : ''} · {t('width')} {area.w} × {t('height')} {area.h} mm
           {product.id !== 'custom' ? ` · ${size.top} mm ${uiLang === 'de' ? 'unter Kragen/Oberkante' : 'below collar/top edge'}` : ''}
         </p>
+        {size.estimated && <p className="msg warning">{t('estimated')}</p>}
         {garment.dark && p.theme === 'light' && <p className="msg warning">{t('darkOnDark')}</p>}
         {!garment.dark && p.theme === 'dark' && <p className="msg warning">{t('lightOnLight')}</p>}
         <section>
