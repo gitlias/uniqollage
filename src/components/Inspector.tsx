@@ -102,7 +102,17 @@ export function Inspector() {
                 <textarea rows={6} value={tile.markup} {...textProps} onChange={(e) => set({ markup: e.target.value })} />
               </label>
               {tile.image && (
-                <button onClick={() => s.patchTile(tile.id, { image: undefined, imageSource: undefined })}>{t('removeImage')}</button>
+                <>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={tile.imageFit === 'cover'}
+                      onChange={(e) => s.patchTile(tile.id, { imageFit: e.target.checked ? 'cover' : 'contain' })}
+                    />{' '}
+                    {t('cropImage')}
+                  </label>
+                  <button onClick={() => s.patchTile(tile.id, { image: undefined, imageSource: undefined })}>{t('removeImage')}</button>
+                </>
               )}
             </>
           )}

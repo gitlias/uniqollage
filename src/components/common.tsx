@@ -73,6 +73,8 @@ export function Status({ loading, error }: { loading: boolean; error: string | n
 /** Natural aspect ratio (w/h) of an image URL. */
 export function measureAspect(src: string): Promise<number> {
   return new Promise((resolve) => {
+    // Don't wait forever for a slow or broken image.
+    setTimeout(() => resolve(1.33), 8000);
     const img = new Image();
     img.onload = () => resolve(img.naturalWidth / img.naturalHeight || 1);
     img.onerror = () => resolve(1.33);

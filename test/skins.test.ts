@@ -76,6 +76,13 @@ describe('cards', () => {
     expect(r.prims.filter((p) => p.t === 'line')).toHaveLength(1);
     const noImage = renderTile({ ...card, image: undefined }, 3, 'light', 'vector2010');
     expect(r.h - noImage.h).toBeGreaterThan(20);
+    // Whole picture by default: the drawn box has the image's own aspect ratio, also for portraits.
+    for (const aspect of [2.2, 0.6, 0.3]) {
+      const img = renderTile({ ...card, image: { src: 'x.jpg', aspect } }, 3, 'light', 'vector2010').prims.find((p) => p.t === 'image') as { w: number; h: number };
+      expect(img.w / img.h).toBeCloseTo(aspect, 5);
+    }
+    const cropped = renderTile({ ...card, image: { src: 'x.jpg', aspect: 0.6 }, imageFit: 'cover' as const }, 3, 'light', 'vector2010').prims.find((p) => p.t === 'image') as { w: number; h: number };
+    expect(cropped.w / cropped.h).toBeCloseTo(4 / 3, 5);
     const credit = creditText({ ...emptyProject(), tiles: [card] }, 'de');
     expect(credit).toContain('de.wikipedia.org');
     expect(credit).toContain('CC BY-SA 3.0');

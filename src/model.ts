@@ -78,6 +78,8 @@ export interface CardTile extends TileBase {
   description?: string;
   markup: string;
   image?: ImageRef;
+  /** 'contain' (default) shows the whole picture; 'cover' crops it to at most 4:3. */
+  imageFit?: 'contain' | 'cover';
   /** Licence data of the image, for attribution. */
   imageSource?: Source;
 }

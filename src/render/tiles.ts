@@ -199,8 +199,10 @@ function renderImage(t: ImageTile, b: number): Rendered {
   return { h: y, prims: [{ t: 'rect', x: 0, y: 0, w: t.w, h: y, fill: pal.frameBg, stroke: pal.frameBorder, sw }, ...body] };
 }
 
-/** Cards never show images taller than 4:3 (like Wikipedia's page previews). */
+/** Cropped card images are never taller than 4:3 (like Wikipedia's page previews). */
 export const CARD_MIN_ASPECT = 4 / 3;
+/** Uncropped tall images are capped at this height relative to the card width and centred. */
+const CARD_MAX_HEIGHT = 1.2;
 
 function renderCard(t: CardTile, b: number): Rendered {
   const sw = Math.max(b * 0.07, 0.1);
@@ -209,8 +211,16 @@ function renderCard(t: CardTile, b: number): Rendered {
   const body: Prim[] = [];
   let y = pad;
   if (t.image) {
-    const ih = inner / Math.max(t.image.aspect, CARD_MIN_ASPECT);
-    body.push({ t: 'image', x: pad, y, w: inner, h: ih, href: t.image.src });
+    let iw = inner;
+    let ih: number;
+    if (t.imageFit === 'cover') {
+      ih = inner / Math.max(t.image.aspect, CARD_MIN_ASPECT);
+    } else {
+      // Show the whole picture; very tall ones get narrower instead of cropped.
+      ih = Math.min(inner / t.image.aspect, inner * CARD_MAX_HEIGHT);
+      iw = ih * t.image.aspect;
+    }
+    body.push({ t: 'image', x: pad + (inner - iw) / 2, y, w: iw, h: ih, href: t.image.src });
     y += ih + b * 0.6;
   }
   const sans = skin === 'monobook';

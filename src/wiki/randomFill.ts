@@ -1,6 +1,7 @@
 import type { Lang, Source, TileDraft } from '../model';
 import { articleUrl, didYouKnow, imageInfo, loadLead, randomArticles, type ImageInfo, type RandomArticle } from './api';
 import { cardDraft } from './cards';
+import { measureAspect } from '../components/common';
 import { dykTileMarkup, type Figure, type ParsedArticle } from './parse';
 import { escapeText, stripMarkup } from '../text/markup';
 
@@ -77,12 +78,12 @@ function randomMonth(lang: Lang, rand: () => number): { year: number; month: num
   return { year, month: 1 + Math.floor(rand() * 12) };
 }
 
-function imageDraft(fig: Figure, info: ImageInfo | undefined, article: { lang: Lang; title: string }): TileDraft {
+async function imageDraft(fig: Figure, info: ImageInfo | undefined, article: { lang: Lang; title: string }): Promise<TileDraft> {
   const caption = fig.caption || `[[${escapeText(article.title)}]]`;
   const source: Source = { kind: 'wikipedia', lang: article.lang, title: fig.file, url: info?.page, license: info?.license, artist: info?.artist };
   return {
     type: 'image',
-    image: { src: info?.url ?? fig.thumb, aspect: info ? info.width / info.height : 1.33 },
+    image: { src: info?.url ?? fig.thumb, aspect: info ? info.width / info.height : await measureAspect(fig.thumb) },
     caption,
     frame: true,
     source,
@@ -171,14 +172,14 @@ export async function randomFill(opts: FillOptions): Promise<FillResult> {
         push({
           type: 'infobox',
           heading: ib.heading || lead.title,
-          image: ib.image ? { src: info?.url ?? ib.image.thumb, aspect: info ? info.width / info.height : 1 } : undefined,
+          image: ib.image ? { src: info?.url ?? ib.image.thumb, aspect: info ? info.width / info.height : await measureAspect(ib.image.thumb) } : undefined,
           imageCaption: ib.image?.caption,
           rows: ib.rows.slice(0, 6),
           source,
         });
         need.infobox--;
       } else if (need.image && fig) {
-        push(imageDraft(fig, infos.get(fig.file), { lang, title: lead.title }));
+        push(await imageDraft(fig, infos.get(fig.file), { lang, title: lead.title }));
         need.image--;
       } else if (need.fact && facts.length) {
         push({ type: 'text', markup: pick(facts.slice(0, 2), rand).markup, source });
