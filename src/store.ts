@@ -109,7 +109,7 @@ function toTiles(project: Project, drafts: TileDraft[]): Tile[] {
 function relayout(p: Project, shuffle: boolean): Project {
   const seed = shuffle ? Math.floor(Math.random() * 2 ** 31) : p.seed;
   const order = shuffle ? shuffled(p.tiles, seed) : p.tiles;
-  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin });
+  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed, skin: p.skin, gap: p.gap });
   return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
 }
 

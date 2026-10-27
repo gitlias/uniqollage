@@ -1,10 +1,8 @@
 import { normalize, useStore, updateAndRelayout } from '../store';
-import type { Skin } from '../model';
-
-const SKINS: Skin[] = ['vector2010', 'vector2022', 'monobook', 'minerva'];
 import { useT } from '../i18n';
 import { useUi } from '../ui';
-import { areaOf, garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
+import { offerIn, productById, productsIn } from '../products';
+import { SettingsPanel } from './SettingsPanel';
 
 export function Toolbar() {
   const t = useT();
@@ -12,33 +10,15 @@ export function Toolbar() {
   const uiLang = useStore((s) => s.uiLang);
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
-  const autoLayout = useStore((s) => s.autoLayout);
-  const snap = useUi((u) => u.snap);
+  const settingsOpen = useUi((u) => u.settingsOpen);
   const s = useStore.getState();
   const product = productById(p.productId);
   const offer = offerIn(product, p.region);
-  const area = areaOf(p);
-  const maxMargin = Math.floor(Math.min(area.w, area.h) / 4);
   const size = offer.sizes.find((x) => x.id === p.sizeId);
-
-  const setSize = (baseSize: number) => {
-    if (autoLayout) updateAndRelayout((x) => ({ ...x, baseSize, autoSize: false }));
-    else s.update((x) => ({ ...x, baseSize, autoSize: false }));
-  };
 
   return (
     <div className="toolbar">
       <div className="group">
-        <label>
-          {t('region')}
-          <select value={p.region} onChange={(e) => updateAndRelayout((x) => normalize({ ...x, region: e.target.value as Region }))}>
-            {REGIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name[uiLang]}
-              </option>
-            ))}
-          </select>
-        </label>
         <label>
           {t('product')}
           <select
@@ -81,57 +61,10 @@ export function Toolbar() {
             {offer.sizes[0].w / 10}×{offer.sizes[0].h / 10} cm
           </span>
         )}
-        {product.shape === 'poster' && (
-          <>
-            <div className="seg" role="group" aria-label={t('orientation')}>
-              <button className={!p.landscape ? 'on' : ''} onClick={() => updateAndRelayout((x) => ({ ...x, landscape: false }))}>
-                {t('portrait')}
-              </button>
-              <button className={p.landscape ? 'on' : ''} onClick={() => updateAndRelayout((x) => ({ ...x, landscape: true }))}>
-                {t('landscape')}
-              </button>
-            </div>
-          </>
-        )}
-        <label title={t('marginHint')}>
-          {t('margin')}
-          <input
-            type="number"
-            min={0}
-            max={maxMargin}
-            step={1}
-            value={p.margins ?? 0}
-            onChange={(e) => updateAndRelayout((x) => ({ ...x, margins: Math.min(maxMargin, Math.max(0, Number(e.target.value) || 0)) }))}
-          />
-        </label>
-        {p.productId === 'custom' && (
-          <>
-            <label>
-              {t('width')}
-              <input
-                type="number"
-                min={30}
-                max={1000}
-                value={p.customArea.w}
-                onChange={(e) => updateAndRelayout((x) => ({ ...x, customArea: { ...x.customArea, w: Math.max(30, Number(e.target.value)) } }))}
-              />
-            </label>
-            <label>
-              {t('height')}
-              <input
-                type="number"
-                min={30}
-                max={1000}
-                value={p.customArea.h}
-                onChange={(e) => updateAndRelayout((x) => ({ ...x, customArea: { ...x.customArea, h: Math.max(30, Number(e.target.value)) } }))}
-              />
-            </label>
-          </>
-        )}
       </div>
       <div className="group">
         <button onClick={() => useUi.getState().setFillOpen(true)}>🎲 {t('fillRandom')}</button>
-        <button className="primary" disabled={!p.tiles.length} onClick={() => s.arrange(true)} title="Shuffle">
+        <button className="primary" disabled={!p.tiles.length} onClick={() => s.arrange(true)}>
           {t('shuffle')}
         </button>
         <button disabled={!p.tiles.length} onClick={() => s.arrange(false)}>
@@ -139,59 +72,22 @@ export function Toolbar() {
         </button>
       </div>
       <div className="group">
-        <label>
-          {t('textSize')}
-          <input type="range" min={0.8} max={10} step={0.05} value={p.baseSize} onChange={(e) => setSize(Number(e.target.value))} />
-          <span className="muted small">{(p.baseSize / 0.3528).toFixed(1)} pt</span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={p.autoSize} onChange={(e) => updateAndRelayout((x) => ({ ...x, autoSize: e.target.checked }))} /> {t('autoSize')}
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={p.credit} onChange={(e) => updateAndRelayout((x) => ({ ...x, credit: e.target.checked }))} /> {t('credit')}
-        </label>
-      </div>
-      <div className="group">
-        <button disabled={!canUndo} onClick={s.undo} title="Ctrl+Z">
+        <button disabled={!canUndo} onClick={s.undo} title={`${t('undo')} (Ctrl+Z)`} aria-label={t('undo')}>
           ↶
         </button>
-        <button disabled={!canRedo} onClick={s.redo} title="Ctrl+Shift+Z">
+        <button disabled={!canRedo} onClick={s.redo} title={`${t('redo')} (Ctrl+Shift+Z)`} aria-label={t('redo')}>
           ↷
         </button>
-        <label className="check" title={t('snapHint')}>
-          <input type="checkbox" checked={snap} onChange={() => useUi.getState().toggleSnap()} /> {t('snap')}
-        </label>
       </div>
-      <div className="group">
-        {offer.colors.length > 1 && <span className="muted">{t('garment')}</span>}
-        <div className="swatches">
-          {(offer.colors.length > 1 ? offer.colors : []).map((id) => {
-            const g = garmentColor(id);
-            return (
-              <button
-                key={id}
-                className={`swatch ${p.garment === id ? 'on' : ''}`}
-                style={{ background: g.hex }}
-                title={g.name[uiLang]}
-                onClick={() => s.update((x) => ({ ...x, garment: id, theme: g.dark ? 'dark' : 'light' }))}
-              />
-            );
-          })}
-        </div>
-        <label title={t('skinHint')}>
-          {t('skin')}
-          <select value={p.skin ?? 'vector2010'} onChange={(e) => updateAndRelayout((x) => ({ ...x, skin: e.target.value as Skin }))}>
-            {SKINS.map((k) => (
-              <option key={k} value={k}>
-                {t(`skin_${k}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="check" title={t('nightModeHint')}>
-          <input type="checkbox" checked={p.theme === 'dark'} onChange={(e) => s.update((x) => ({ ...x, theme: e.target.checked ? 'dark' : 'light' }))} />{' '}
-          {t('nightMode')}
-        </label>
+      <div className="group settings-anchor">
+        <button
+          className={`settings-toggle ${settingsOpen ? 'on' : ''}`}
+          aria-expanded={settingsOpen}
+          onClick={() => useUi.getState().setSettingsOpen(!settingsOpen)}
+        >
+          ⚙ {t('settings')}
+        </button>
+        {settingsOpen && <SettingsPanel />}
       </div>
     </div>
   );

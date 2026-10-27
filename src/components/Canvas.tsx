@@ -12,6 +12,7 @@ import type { Tile } from '../model';
 import { boundsOf, MOVE_EDGES, snapBox, type Box, type Guide, type SnapEdges } from '../layout/snap';
 import { contentBox, marginOf } from '../render/collage';
 import { tileHeight } from '../render/tiles';
+import { autoGap } from '../layout/pack';
 
 /** Snap distance in screen pixels. */
 const SNAP_PX = 7;
@@ -64,7 +65,7 @@ export function Canvas() {
     return {
       others: c.placed.filter((p) => p.tile.id !== id).map((p) => boundsOf(p.tile.x, p.tile.y, p.tile.w, p.h, p.tile.rot)),
       frames: [{ x: 0, y: 0, w: c.w, h: c.h }, contentBox(project)],
-      gap: project.baseSize * 1.1,
+      gap: project.gap ?? autoGap(project.baseSize),
       threshold: SNAP_PX * mmPerPx,
     };
   };

@@ -117,6 +117,8 @@ export interface Project {
   skin?: Skin;
   /** Posters only: landscape orientation. */
   landscape?: boolean;
+  /** Spacing between tiles in mm; undefined = automatic (follows the text size). */
+  gap?: number;
   /** Empty margin around the collage inside the print area / poster, mm (all products). */
   margins?: number;
   /** @deprecated Poster-only margin of older projects; migrated to `margins`. */

@@ -100,3 +100,23 @@ describe('extended scripts', () => {
     for (const ch of ['Ӏ', 'ӏ', 'ἀ', 'ệ']) expect(font('sans').measure(ch, 10)).not.toBe(notdef);
   });
 });
+
+describe('fixed spacing', () => {
+  it('keeps exactly the chosen gap between neighbouring tiles', () => {
+    const area = { x: 0, y: 0, w: 250, h: 320 };
+    const res = arrange(sample(16), area, { baseSize: 3, autoSize: true, seed: 5, gap: 6 });
+    const boxes = res.tiles.map((t) => ({ x: t.x, y: t.y, r: t.x + t.w, b: t.y + renderTile(t, res.baseSize).h }));
+    let minH = Infinity;
+    let minV = Infinity;
+    for (const a of boxes)
+      for (const b of boxes) {
+        if (a === b) continue;
+        const rowOverlap = a.y < b.b && b.y < a.b;
+        const colOverlap = a.x < b.r && b.x < a.r;
+        if (rowOverlap && b.x >= a.r - 1e-6) minH = Math.min(minH, b.x - a.r);
+        if (colOverlap && b.y >= a.b - 1e-6) minV = Math.min(minV, b.y - a.b);
+      }
+    expect(minH).toBeCloseTo(6, 6);
+    expect(minV).toBeGreaterThanOrEqual(6 - 0.01);
+  });
+});

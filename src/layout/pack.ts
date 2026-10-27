@@ -81,8 +81,11 @@ function spanFor(t: Tile, cols: number, colW: number, gap: number, b: number, r:
   return Math.max(1, Math.min(s, cols, Math.max(2, Math.ceil(cols * 0.67))));
 }
 
-function attempt(tiles: Tile[], area: Box, b: number, seed: number, skin: Skin): Attempt {
-  const gap = b * 1.1;
+/** Automatic spacing between tiles for a body text size (mm). */
+export const autoGap = (b: number) => b * 1.1;
+
+function attempt(tiles: Tile[], area: Box, b: number, seed: number, skin: Skin, fixedGap?: number): Attempt {
+  const gap = fixedGap ?? autoGap(b);
   const cols = Math.max(1, Math.round((area.w + gap) / (b * 15 + gap)));
   const colW = (area.w - (cols - 1) * gap) / cols;
   const r = rng(seed);
@@ -113,13 +116,13 @@ function attempt(tiles: Tile[], area: Box, b: number, seed: number, skin: Skin):
 }
 
 /** Largest body size at which this variant fits, with its layout. */
-function fit(tiles: Tile[], area: Box, seed: number, skin: Skin): { b: number; res: Attempt } | null {
+function fit(tiles: Tile[], area: Box, seed: number, skin: Skin, gap?: number): { b: number; res: Attempt } | null {
   let lo = 0.6;
   let hi = Math.min(area.w, area.h) / 6;
   let best: { b: number; res: Attempt } | null = null;
   for (let i = 0; i < 14; i++) {
     const mid = (lo + hi) / 2;
-    const a = attempt(tiles, area, mid, seed, skin);
+    const a = attempt(tiles, area, mid, seed, skin, gap);
     if (a.height <= area.h) {
       best = { b: mid, res: a };
       lo = mid;
@@ -168,7 +171,7 @@ const VARIANTS = 6;
 export function arrange(
   tiles: Tile[],
   area: Box,
-  opts: { baseSize: number; autoSize: boolean; seed: number; skin?: Skin },
+  opts: { baseSize: number; autoSize: boolean; seed: number; skin?: Skin; /** Fixed spacing in mm; default follows the text size. */ gap?: number },
 ): ArrangeResult {
   const skin = opts.skin ?? 'vector2010';
   if (!tiles.length) return { tiles, baseSize: opts.baseSize, overflow: false };
@@ -179,7 +182,7 @@ export function arrange(
   if (opts.autoSize) {
     let best: { b: number; res: Attempt } | null = null;
     for (let v = 0; v < VARIANTS; v++) {
-      const f = fit(clean, area, opts.seed + v * 7919, skin);
+      const f = fit(clean, area, opts.seed + v * 7919, skin, opts.gap);
       if (f && (!best || f.b > best.b)) best = f;
     }
     if (best) {
@@ -187,12 +190,13 @@ export function arrange(
       res = best.res;
     } else b = 0.6;
   }
-  res ??= attempt(clean, area, b, opts.seed, skin);
+  res ??= attempt(clean, area, b, opts.seed, skin, opts.gap);
   const overflow = res.height > area.h + 1e-6;
   fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
   // scaling y by k ≥ 1 keeps every gap at least as large as before).
-  const k = res.height > 0 && res.height < area.h ? area.h / res.height : 1;
+  // With a fixed spacing the gaps must stay exactly as set, so don't spread.
+  const k = opts.gap === undefined && res.height > 0 && res.height < area.h ? area.h / res.height : 1;
   const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y * k }));
   return { tiles: out, baseSize: Math.round(b * 1000) / 1000, overflow };
 }

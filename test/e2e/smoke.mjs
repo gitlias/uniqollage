@@ -155,26 +155,41 @@ await step('undo/redo', async () => {
   await page.keyboard.press('Control+Shift+z');
 });
 
+const openSettings = async () => {
+  if (!(await page.locator('.settings-panel').count())) await page.click('.settings-toggle');
+  await page.waitForSelector('.settings-panel');
+};
+const closeSettings = async () => {
+  if (await page.locator('.settings-panel').count()) await page.click('.settings-toggle');
+};
+const setRegion = async (r) => {
+  await openSettings();
+  await page.selectOption('.settings-panel select >> nth=0', r);
+  await closeSettings();
+};
+
 await step('mockups', async () => {
-  const region = '.toolbar select >> nth=0';
-  const product = '.toolbar select >> nth=1';
-  const size = '.toolbar select >> nth=2';
+  const product = '.toolbar select >> nth=0';
+  const size = '.toolbar select >> nth=1';
   await page.click('.page-tabs button >> text=Preview on product');
   await page.screenshot({ path: `${out}/mockup-tshirt.png` });
-  const deProducts = await page.locator('.toolbar select').nth(1).locator('option').allTextContents();
+  const deProducts = await page.locator('.toolbar select').nth(0).locator('option').allTextContents();
   if (deProducts.length !== 6 || deProducts.some((x) => /Sweat|AIRism|U Crew/.test(x))) throw new Error(`DE products: ${deProducts}`);
   await page.selectOption(size, '3XL');
   await page.waitForSelector('.toolbar .estimated');
-  await page.selectOption(region, 'jp');
+  await setRegion('jp');
   await page.selectOption(product, 'sweat');
   await page.selectOption(size, 'L');
-  await page.click('.swatch[title=Black]');
-  if (!(await page.isChecked('.toolbar input[type=checkbox] >> nth=-1'))) throw new Error('night mode not enabled for black');
+  await openSettings();
+  await page.click('.settings-panel .swatch[title=Black]');
+  const night = page.locator('.settings-panel label', { hasText: /Night mode|Dunkelmodus/ }).locator('input');
+  if (!(await night.isChecked())) throw new Error('night mode not enabled for black');
+  await closeSettings();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-sweat-black.png` });
   await page.selectOption(product, 'airism-oversized');
   await page.screenshot({ path: `${out}/mockup-oversized.png` });
-  await page.selectOption(region, 'de');
+  await setRegion('de');
   await page.selectOption(product, 'tote');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-tote.png` });
@@ -184,14 +199,18 @@ await step('mockups', async () => {
   await page.screenshot({ path: `${out}/mockup-kids.png` });
   await page.selectOption(product, 'poster');
   await page.selectOption(size, 'A2');
-  await page.click('.toolbar .seg button >> text=Landscape');
+  await openSettings();
+  await page.click('.settings-panel .seg button >> text=Landscape');
+  await closeSettings();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/mockup-poster.png` });
   await page.click('header button.primary');
   const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.modal button >> text=PDF (vector)')]);
   await pdf.saveAs(`${out}/poster.pdf`);
   await page.click('.modal button >> text=Close');
-  await page.click('.toolbar .seg button >> text=Portrait');
+  await openSettings();
+  await page.click('.settings-panel .seg button >> text=Portrait');
+  await closeSettings();
   await page.selectOption(product, 'basic-t');
   await page.selectOption(size, 'M');
   await page.click('.page-tabs button >> text=Edit');
@@ -215,7 +234,7 @@ await step('exports', async () => {
 
 await step('fill randomly', async () => {
   if (await page.locator('.modal').count()) await page.click('.modal button >> text=Close');
-  await page.click('.toolbar button >> text=Fill randomly');
+  await page.click('.toolbar button >> text=/Fill randomly|Zufällig füllen/');
   await page.waitForSelector('.modal .fill-types');
   await page.locator('.modal input[type=range]').fill('12');
   await page.click('.modal label >> text=Infoboxes');
@@ -277,18 +296,35 @@ await step('German UI', async () => {
   await page.waitForSelector('text=Mischen');
 });
 
-await step('adjustable margin', async () => {
-  const marginInput = page.locator('.toolbar label', { hasText: /^(Margin|Rand)/ }).locator('input');
-  await marginInput.fill('20');
+await step('spacing and margin in the settings panel', async () => {
+  const setRange = async (label, value) => {
+    const input = page.locator('.settings-panel label', { hasText: label }).locator('input[type=range]');
+    await input.evaluate((el, v) => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      set.call(el, String(v));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
+  };
+  await openSettings();
+  await setRange(/^(Spacing|Abstand)/, 10);
+  await setRange(/^(Margin|Rand)/, 20);
+  await closeSettings();
   await page.waitForSelector('.canvas .margin-guide');
   const guide = await page.locator('.canvas .margin-guide').boundingBox();
   const pg = await page.locator('svg.canvas > rect').first().boundingBox();
   if (!(guide.x > pg.x + 5 && guide.width < pg.width - 10)) throw new Error('margin guide not inset');
-  // Tiles stay inside the margin after re-arranging.
-  const boxes = await page.locator('.canvas .tile .hit').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y, r: r.right })));
+  const boxes = await page.locator('.canvas .tile .hit').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y, r: r.right, b: r.bottom })));
   if (boxes.some((b) => b.x < guide.x - 1 || b.r > guide.x + guide.width + 1)) throw new Error('tiles outside the margin');
-  await page.screenshot({ path: `${out}/margin.png` });
-  await marginInput.fill('0');
+  // Neighbours in a row are 10 mm apart: compare with the page width in px (310 mm).
+  const pxPerMm = pg.width / 310;
+  let minGap = Infinity;
+  for (const a of boxes) for (const b of boxes) if (a !== b && a.y < b.b && b.y < a.b && b.x >= a.r - 0.5) minGap = Math.min(minGap, b.x - a.r);
+  if (Math.abs(minGap / pxPerMm - 10) > 0.6) throw new Error(`spacing ${minGap / pxPerMm} mm, expected 10`);
+  await page.screenshot({ path: `${out}/spacing.png` });
+  await openSettings();
+  await page.locator('.settings-panel label', { hasText: /Automatic spacing|Automatischer Abstand/ }).locator('input').check();
+  await setRange(/^(Margin|Rand)/, 0);
+  await closeSettings();
 });
 
 await step('snapping to the page edge (Alt moves freely)', async () => {

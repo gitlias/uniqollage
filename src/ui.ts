@@ -12,6 +12,8 @@ interface UiState {
   searchRequest: { q: string; nonce: number } | null;
   exportOpen: boolean;
   fillOpen: boolean;
+  settingsOpen: boolean;
+  setSettingsOpen(v: boolean): void;
   /** Side panels (remembered per browser). */
   leftOpen: boolean;
   rightOpen: boolean;
@@ -57,6 +59,8 @@ export const useUi = create<UiState>((set) => ({
   searchRequest: null,
   exportOpen: false,
   fillOpen: false,
+  settingsOpen: false,
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   leftOpen: stored('uniqollage:left', true),
   rightOpen: stored('uniqollage:right', true),
   toggleLeft: () =>
