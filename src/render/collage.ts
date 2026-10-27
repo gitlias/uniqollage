@@ -113,6 +113,24 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
 
+/** Unique ids for clip paths within one SVG document. */
+let clipSeq = 0;
+
+/**
+ * The rectangle a picture of ratio `aspect` must be drawn at to cover box
+ * (x, y, w, h) – the overflow is clipped. Done explicitly because svg2pdf
+ * ignores preserveAspectRatio="… slice" and would draw the picture uncropped.
+ */
+export function coverRect(x: number, y: number, w: number, h: number, aspect: number) {
+  if (!(aspect > 0) || Math.abs(aspect - w / h) < 1e-6) return { x, y, w, h };
+  if (aspect > w / h) {
+    const dw = h * aspect;
+    return { x: x - (dw - w) / 2, y, w: dw, h };
+  }
+  const dh = w / aspect;
+  return { x, y: y - (dh - h) / 2, w, h: dh };
+}
+
 export function primToSvg(p: Prim, hrefMap?: Map<string, string>): string {
   switch (p.t) {
     case 'rect':
@@ -122,8 +140,12 @@ export function primToSvg(p: Prim, hrefMap?: Map<string, string>): string {
     case 'path':
       return `<path transform="translate(${r3(p.x)} ${r3(p.y)})" fill="${p.fill}" d="${p.d}"/>`;
     case 'image': {
-      const href = hrefMap?.get(p.href) ?? p.href;
-      return `<image x="${r3(p.x)}" y="${r3(p.y)}" width="${r3(p.w)}" height="${r3(p.h)}" preserveAspectRatio="xMidYMid slice" href="${esc(href)}" xlink:href="${esc(href)}"/>`;
+      const href = esc(hrefMap?.get(p.href) ?? p.href);
+      const d = coverRect(p.x, p.y, p.w, p.h, p.aspect);
+      const img = `<image x="${r3(d.x)}" y="${r3(d.y)}" width="${r3(d.w)}" height="${r3(d.h)}" preserveAspectRatio="none" href="${href}" xlink:href="${href}"`;
+      if (d.w === p.w && d.h === p.h) return `${img}/>`;
+      const id = `clip${++clipSeq}`;
+      return `<clipPath id="${id}"><rect x="${r3(p.x)}" y="${r3(p.y)}" width="${r3(p.w)}" height="${r3(p.h)}"/></clipPath>${img} clip-path="url(#${id})"/>`;
     }
   }
 }

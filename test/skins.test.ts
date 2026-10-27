@@ -88,3 +88,17 @@ describe('cards', () => {
     expect(credit).toContain('CC BY-SA 3.0');
   });
 });
+
+describe('cropped images in exports', () => {
+  it('draws the picture at its own ratio and clips it to the box (svg2pdf ignores "slice")', async () => {
+    const { coverRect, compositionToSvg } = await import('../src/render/collage');
+    // Portrait 1:2 picture in a 3:2 box: drawn full width, centred vertically, taller than the box.
+    expect(coverRect(0, 0, 60, 40, 0.5)).toEqual({ x: 0, y: -40, w: 60, h: 120 });
+    expect(coverRect(0, 0, 60, 40, 1.5)).toEqual({ x: 0, y: 0, w: 60, h: 40 });
+    const tile = { ...image, image: { src: 'x.png', aspect: 0.5 }, boxAspect: 1.5 };
+    const r = renderTile(tile, 3, 'light', 'vector2010');
+    const svg = compositionToSvg({ w: 100, h: 100, placed: [{ tile, h: r.h, prims: r.prims }], credit: [] });
+    expect(svg).toMatch(/<clipPath id="clip\d+"><rect[^>]*\/><\/clipPath><image[^>]*preserveAspectRatio="none"[^>]*clip-path="url\(#clip\d+\)"/);
+    expect(svg).not.toContain('slice');
+  });
+});

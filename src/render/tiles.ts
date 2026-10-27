@@ -11,7 +11,8 @@ export type Prim =
   | { t: 'rect'; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number }
   | { t: 'line'; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number }
   | { t: 'path'; d: string; fill: string; x: number; y: number }
-  | { t: 'image'; x: number; y: number; w: number; h: number; href: string };
+  /** `aspect` is the picture's own ratio; the box (w×h) shows it like CSS object-fit: cover. */
+  | { t: 'image'; x: number; y: number; w: number; h: number; href: string; aspect: number };
 
 export interface Rendered {
   h: number;
@@ -158,7 +159,7 @@ function renderImage(t: ImageTile, b: number): Rendered {
   const inset = sw + pad;
   const iw = t.w - 2 * inset;
   const ih = iw / aspect;
-  const body: Prim[] = [{ t: 'image', x: inset, y: inset, w: iw, h: ih, href: t.image.src }];
+  const body: Prim[] = [{ t: 'image', x: inset, y: inset, w: iw, h: ih, href: t.image.src, aspect: t.image.aspect }];
   let y = inset + ih;
   const caption = t.caption.trim();
 
@@ -220,7 +221,7 @@ function renderCard(t: CardTile, b: number): Rendered {
       ih = Math.min(inner / t.image.aspect, inner * CARD_MAX_HEIGHT);
       iw = ih * t.image.aspect;
     }
-    body.push({ t: 'image', x: pad + (inner - iw) / 2, y, w: iw, h: ih, href: t.image.src });
+    body.push({ t: 'image', x: pad + (inner - iw) / 2, y, w: iw, h: ih, href: t.image.src, aspect: t.image!.aspect });
     y += ih + b * 0.6;
   }
   const sans = skin === 'monobook';
@@ -262,7 +263,7 @@ function renderInfobox(t: InfoboxTile, b: number): Rendered {
   if (t.image) {
     const iw = inner * 0.86;
     const ih = iw / t.image.aspect;
-    body.push({ t: 'image', x: pad + (inner - iw) / 2, y, w: iw, h: ih, href: t.image.src });
+    body.push({ t: 'image', x: pad + (inner - iw) / 2, y, w: iw, h: ih, href: t.image.src, aspect: t.image!.aspect });
     y += ih + b * 0.25;
     if (t.imageCaption?.trim()) {
       const cap = text(t.imageCaption, pad, y, inner, { size: size * 0.95, lineHeight: 1.4, align: 'center' });
