@@ -11,6 +11,8 @@ interface UiState {
   /** Query typed into the header search box. */
   searchRequest: { q: string; nonce: number } | null;
   exportOpen: boolean;
+  fillOpen: boolean;
+  setFillOpen(v: boolean): void;
   search(q: string): void;
   setTab(t: SourceTab): void;
   setView(v: 'editor' | 'mockup'): void;
@@ -24,6 +26,8 @@ export const useUi = create<UiState>((set) => ({
   openRequest: null,
   searchRequest: null,
   exportOpen: false,
+  fillOpen: false,
+  setFillOpen: (fillOpen) => set({ fillOpen }),
   search: (q) => set({ tab: 'search', searchRequest: { q, nonce: Date.now() } }),
   setTab: (tab) => set({ tab }),
   setView: (view) => set({ view }),

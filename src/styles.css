@@ -854,3 +854,11 @@ button.add {
   color: #ac6600;
   font-weight: 700;
 }
+.fill-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+.modal input[type='range'] {
+  flex: 1;
+}

@@ -3,6 +3,7 @@ import type { Skin } from '../model';
 
 const SKINS: Skin[] = ['vector2010', 'vector2022', 'monobook', 'minerva'];
 import { useT } from '../i18n';
+import { useUi } from '../ui';
 import { garmentColor, offerIn, productById, productsIn, REGIONS, type Region } from '../products';
 
 export function Toolbar() {
@@ -119,6 +120,7 @@ export function Toolbar() {
         )}
       </div>
       <div className="group">
+        <button onClick={() => useUi.getState().setFillOpen(true)}>🎲 {t('fillRandom')}</button>
         <button className="primary" disabled={!p.tiles.length} onClick={() => s.arrange(true)} title="Shuffle">
           {t('shuffle')}
         </button>

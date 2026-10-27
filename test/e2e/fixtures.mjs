@@ -40,6 +40,8 @@ export const dykDeHtml = `<div class="mw-parser-output"><div class="hauptseite-b
 <li>Der <a href="/wiki/Brillenkauz" title="Brillenkauz"><b>Brillenkauz</b></a> trägt seine Brille schon als Küken – allerdings umgekehrt gefärbt.</li>
 </ul></div></div>`;
 
+let randomCalls = 0;
+
 export function handle(url) {
   const u = new URL(url);
   const p = Object.fromEntries(u.searchParams);
@@ -91,18 +93,25 @@ export function handle(url) {
     });
   }
   if (p.action === 'query' && p.generator === 'random') {
+    // Fresh titles on every call, like the real endpoint; every other one has a picture.
+    const pages = [
+      { title: 'Brillenkauz', extract: 'Der Brillenkauz ist eine Eulenart aus Mittel- und Südamerika. Er ist nachtaktiv.', description: 'Art der Gattung Pulsatrix' },
+      {
+        title: 'Hallig',
+        extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.',
+        description: 'kleine Marschinsel',
+        pageimage: 'Ginkgo_tree.jpg',
+        thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}`, width: 500, height: 333 },
+      },
+    ];
+    const n = Number(p.grnlimit ?? 2);
+    randomCalls++;
     return json({
       query: {
-        pages: [
-          { title: 'Brillenkauz', extract: 'Der Brillenkauz ist eine Eulenart aus Mittel- und Südamerika. Er ist nachtaktiv.', description: 'Art der Gattung Pulsatrix' },
-          {
-            title: 'Hallig',
-            extract: 'Eine Hallig ist eine kleine, nicht oder nur wenig geschützte Marschinsel.',
-            description: 'kleine Marschinsel',
-            pageimage: 'Ginkgo_tree.jpg',
-            thumbnail: { source: `https:${img('Ginkgo_tree.jpg', 500)}`, width: 500, height: 333 },
-          },
-        ],
+        pages: Array.from({ length: n }, (_, i) => {
+          const base = pages[i % 2];
+          return randomCalls === 1 && i < 2 ? base : { ...base, title: `${base.title} ${randomCalls}-${i}` };
+        }),
       },
     });
   }

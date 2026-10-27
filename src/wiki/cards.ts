@@ -1,6 +1,6 @@
 import type { ImageRef, Lang, Source, TileDraft } from '../model';
-import { articleUrl, imageInfo } from '../wiki/api';
-import { measureAspect } from './common';
+import { articleUrl, imageInfo } from './api';
+import { measureAspect } from '../components/common';
 
 /** Build a page-preview card: lead image at print resolution (with licence), title, description, text. */
 export async function cardDraft(opts: {

@@ -182,6 +182,20 @@ await step('exports', async () => {
   }
 });
 
+await step('fill randomly', async () => {
+  if (await page.locator('.modal').count()) await page.click('.modal button >> text=Close');
+  await page.click('.toolbar button >> text=Fill randomly');
+  await page.waitForSelector('.modal .fill-types');
+  await page.locator('.modal input[type=range]').fill('12');
+  await page.click('.modal label >> text=Infoboxes');
+  await page.click('.modal button.primary >> text=Fill');
+  await page.waitForFunction(() => !document.querySelector('.modal') || document.querySelector('.modal .msg'), null, { timeout: 60000 });
+  if (await page.locator('.modal').count()) await page.click('.modal button >> text=Close');
+  const n = await page.locator('.tile-list li').count();
+  if (n < 10 || n > 12) throw new Error(`expected ~12 tiles after fill, got ${n}`);
+  await page.screenshot({ path: `${out}/filled.png` });
+});
+
 await step('autosave survives reload', async () => {
   const before = await page.locator('.tile-list li').count();
   await page.waitForTimeout(800);

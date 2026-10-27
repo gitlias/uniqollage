@@ -7,6 +7,7 @@ import { Mockup } from './components/Mockup';
 import { Toolbar } from './components/Toolbar';
 import { Inspector } from './components/Inspector';
 import { ExportDialog } from './components/ExportDialog';
+import { FillDialog } from './components/FillDialog';
 import { ArticleTab } from './components/ArticleTab';
 import { DykTab } from './components/DykTab';
 import { RandomTab } from './components/RandomTab';
@@ -47,6 +48,7 @@ export function App() {
   const view = useUi((s) => s.view);
   const setView = useUi((s) => s.setView);
   const exportOpen = useUi((s) => s.exportOpen);
+  const fillOpen = useUi((s) => s.fillOpen);
   const fileInput = useRef<HTMLInputElement>(null);
   const [headerQ, setHeaderQ] = useState('');
   // DYK and Random fetch on mount: mount each tab on first visit, then keep it
@@ -182,6 +184,7 @@ export function App() {
 
       <Inspector />
       {exportOpen && <ExportDialog />}
+      {fillOpen && <FillDialog />}
     </div>
   );
 }

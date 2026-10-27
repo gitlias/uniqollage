@@ -6,7 +6,7 @@ import { useT } from '../i18n';
 import { articleUrl, randomArticles, type RandomArticle } from '../wiki/api';
 import { escapeText } from '../text/markup';
 import { AddButton, LangToggle, Status } from './common';
-import { cardDraft } from './cards';
+import { cardDraft } from '../wiki/cards';
 
 /** Extract with the first occurrence of the title in bold, as in a Wikipedia lead. */
 function leadMarkup(a: RandomArticle): string {

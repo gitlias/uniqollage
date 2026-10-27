@@ -71,6 +71,8 @@ interface State {
   undo(): void;
   redo(): void;
   addTiles(drafts: TileDraft[]): void;
+  /** Add (or replace with) many tiles in one undo step and shuffle the layout. */
+  fill(drafts: TileDraft[], replace: boolean): void;
   patchTile(id: string, patch: Partial<Tile>, history?: boolean): void;
   removeTile(id: string): void;
   duplicateTile(id: string): void;
@@ -79,6 +81,23 @@ interface State {
   select(id: string | null): void;
   setUiLang(l: Lang): void;
   load(p: Project): void;
+}
+
+/** Give drafts ids and a provisional placement (the layout replaces it). */
+function toTiles(project: Project, drafts: TileDraft[]): Tile[] {
+  const area = areaOf(project);
+  return drafts.map(
+    (d, i) =>
+      ({
+        scale: 1,
+        ...d,
+        id: newId(),
+        x: area.w * 0.3 + i * 4,
+        y: area.h * 0.3 + i * 4,
+        w: d.type === 'title' ? area.w * 0.4 : area.w * 0.3,
+        rot: 0,
+      }) as Tile,
+  );
 }
 
 function relayout(p: Project, shuffle: boolean): Project {
@@ -123,24 +142,16 @@ export const useStore = create<State>((set, get) => ({
   },
   addTiles(drafts) {
     const { project, autoLayout } = get();
-    const area = areaOf(project);
-    const tiles: Tile[] = drafts.map(
-      (d, i) =>
-        ({
-          scale: 1,
-          ...d,
-          id: newId(),
-          x: area.w * 0.3 + i * 4,
-          y: area.h * 0.3 + i * 4,
-          w: d.type === 'title' ? area.w * 0.4 : area.w * 0.3,
-          rot: 0,
-        }) as Tile,
-    );
+    const tiles = toTiles(project, drafts);
     get().update((p) => {
       const next = { ...p, tiles: [...p.tiles, ...tiles] };
       return autoLayout ? relayout(next, false) : next;
     });
     set({ selected: tiles.length === 1 ? tiles[0].id : get().selected });
+  },
+  fill(drafts, replace) {
+    get().update((p) => relayout({ ...p, tiles: [...(replace ? [] : p.tiles), ...toTiles(p, drafts)] }, true));
+    set({ autoLayout: true, selected: null });
   },
   patchTile(id, patch, history = true) {
     get().update((p) => ({ ...p, tiles: p.tiles.map((t) => (t.id === id ? ({ ...t, ...patch } as Tile) : t)) }), history);

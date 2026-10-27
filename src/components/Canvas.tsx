@@ -5,6 +5,7 @@ import { PrimEl, TileView } from './TileView';
 import { garmentColor, isPoster } from '../products';
 import { PALETTES } from '../render/tiles';
 import { useT } from '../i18n';
+import { useUi } from '../ui';
 
 type Gesture =
   | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number }
@@ -189,7 +190,14 @@ export function Canvas() {
           </g>
         )}
       </svg>
-      {!project.tiles.length && <div className="canvas-empty">{t('empty')}</div>}
+      {!project.tiles.length && (
+        <div className="canvas-empty">
+          <p>{t('empty')}</p>
+          <button className="primary" onClick={() => useUi.getState().setFillOpen(true)}>
+            🎲 {t('fillRandom')}
+          </button>
+        </div>
+      )}
       {overflow && <div className="canvas-warning">{t('overflow')}</div>}
     </div>
   );

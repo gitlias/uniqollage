@@ -6,7 +6,7 @@ import { useT } from '../i18n';
 import { loadArticle, searchArticles, type Article, type SearchHit } from '../wiki/api';
 import type { Figure } from '../wiki/parse';
 import { AddButton, LangToggle, Markup, Status, measureAspect } from './common';
-import { cardDraft } from './cards';
+import { cardDraft } from '../wiki/cards';
 
 export function ArticleTab() {
   const t = useT();

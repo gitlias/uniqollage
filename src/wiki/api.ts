@@ -164,6 +164,12 @@ export async function loadArticle(lang: Lang, title: string): Promise<Article> {
   return { ...parsed, lang, title: realTitle, url: articleUrl(lang, realTitle), images, description };
 }
 
+/** Parse only the lead section (sentences, lead figures, infobox) – much smaller than the full page. */
+export async function loadLead(lang: Lang, title: string): Promise<ParsedArticle & { title: string }> {
+  const json = await api(lang, { action: 'parse', page: title, prop: 'text', section: 0, redirects: 1, disableeditsection: 1 });
+  return { ...parseArticle(json.parse.text, lang), title: json.parse.title ?? title };
+}
+
 export interface RandomArticle {
   title: string;
   extract: string;
