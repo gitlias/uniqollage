@@ -13,6 +13,7 @@ export function Toolbar() {
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const autoLayout = useStore((s) => s.autoLayout);
+  const snap = useUi((u) => u.snap);
   const s = useStore.getState();
   const product = productById(p.productId);
   const offer = offerIn(product, p.region);
@@ -148,6 +149,9 @@ export function Toolbar() {
         <button disabled={!canRedo} onClick={s.redo} title="Ctrl+Shift+Z">
           ↷
         </button>
+        <label className="check" title={t('snapHint')}>
+          <input type="checkbox" checked={snap} onChange={() => useUi.getState().toggleSnap()} /> {t('snap')}
+        </label>
       </div>
       <div className="group">
         {offer.colors.length > 1 && <span className="muted">{t('garment')}</span>}

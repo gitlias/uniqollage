@@ -964,3 +964,8 @@ button.add {
 [hidden] {
   display: none !important;
 }
+.canvas .snap-guide {
+  stroke: #d63384;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}

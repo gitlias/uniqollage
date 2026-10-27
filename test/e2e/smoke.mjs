@@ -277,6 +277,32 @@ await step('German UI', async () => {
   await page.waitForSelector('text=Mischen');
 });
 
+await step('snapping to the page edge (Alt moves freely)', async () => {
+  // A defined project: one unrotated tile, nothing else to snap to.
+  const project = { version: 1, region: 'de', productId: 'basic-t', sizeId: 'M', theme: 'light', skin: 'vector2010', customArea: { w: 250, h: 320 }, baseSize: 4, autoSize: false, credit: false, seed: 1, garment: 'white',
+    tiles: [{ id: 'a', type: 'text', x: 60, y: 60, w: 80, rot: 0, scale: 1, source: { kind: 'wikipedia' }, markup: 'Snap me to the edge of the print area.' }] };
+  await page.setInputFiles('header input[type=file]', { name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)) });
+  await page.waitForTimeout(500);
+  await page.locator('.canvas .tile .hit').first().click();
+  const tileX = async () => (await page.locator('.canvas rect[stroke="#36c"]').first().boundingBox()).x;
+  const pageLeft = (await page.locator('svg.canvas > rect').first().boundingBox()).x;
+  const dragBy = async (dx, alt) => {
+    const b = await page.locator('.canvas rect[stroke="#36c"]').first().boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    if (alt) await page.keyboard.down('Alt');
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2, { steps: 6 });
+    await page.mouse.up();
+    if (alt) await page.keyboard.up('Alt');
+  };
+  await dragBy(pageLeft + 4 - (await tileX()), false);
+  const snapped = (await tileX()) - pageLeft;
+  if (Math.abs(snapped) > 1.5) throw new Error(`no snap: ${snapped}px from edge`);
+  await dragBy(4, true);
+  const free = (await tileX()) - pageLeft;
+  if (Math.abs(free - 4) > 1.5) throw new Error(`Alt should disable snapping: ${free}px from edge`);
+});
+
 await browser.close();
 if (errors.length) {
   console.error('Errors:\n' + errors.join('\n'));

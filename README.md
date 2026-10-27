@@ -1,5 +1,7 @@
 # Uniqollage
 
+**▶ Open the editor: [gitlias.github.io/uniqollage](https://gitlias.github.io/uniqollage/)**
+
 A browser-based collage editor for **Wikipedia fun-fact prints** on UNIQLO
 **UTme!** products (T-shirts, tote bags, sweatshirts), inspired by the
 [Kleinian custom wiki print](https://kleinian.com/products/custom-wiki-print).
@@ -28,8 +30,9 @@ files.
   Codex design tokens.
 - **Auto layout + manual tweaks** – seeded masonry packing that picks the
   largest text size that fills the print area, crops images to close holes;
-  *Shuffle* for a new arrangement. Drag to move, handles to resize/rotate,
-  per-tile text scale, undo/redo, keyboard shortcuts.
+  *Shuffle* for a new arrangement. Drag to move, resize from every edge and
+  corner, rotate, snap to edges, centres and the layout spacing (toggle,
+  Alt to move freely), zoom, per-tile text scale, undo/redo, shortcuts.
 - **UTme! products with official print areas per size**, filtered by region:
   *Germany* (T-shirt adults XXS–3XL, T-shirt kids 110–160, tote, mini tote –
   white/off white, with prices) or *Japan* (adds U Crew Neck T, AIRism

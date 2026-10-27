@@ -3,11 +3,12 @@ import { imageBoxWidth, tileHeight } from '../render/tiles';
 
 // Resizing a tile from any edge or corner. A tile's height follows from its
 // content, so each handle maps to something the content can do:
-// - left/right edges: width (text reflows, images scale)
+// - left/right edges: width; text reflows, images crop (their height stays)
 // - top/bottom edges: images crop (box aspect); text-like tiles change their
 //   text size until the tile reaches the dragged height
 // - corners: scale width and text size together
-// The opposite edge/corner stays put, also for rotated tiles.
+// Only the dragged edge moves: the opposite edge stays put and side handles
+// keep the top (or, for the top handle, the bottom) fixed – also when rotated.
 
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -55,7 +56,15 @@ export function resizeTile(t0: Tile, h0: number, handle: Handle, dx: number, dy:
     const k = clamp((kx + ky) / 2, MIN_W / t0.w, 20);
     patch = { w: t0.w * k, scale: clamp(t0.scale * k, SCALE[0], SCALE[1]) };
   } else if (E || W) {
-    patch = { w: Math.max(MIN_W, t0.w + (E ? lx : -lx)) };
+    const w = Math.max(MIN_W, t0.w + (E ? lx : -lx));
+    if (t0.type === 'image') {
+      // Keep the picture's height: a wider/narrower box crops the image.
+      const ih = imageBoxWidth(t0, ctx.baseSize, ctx.skin) / (t0.boxAspect ?? t0.image.aspect);
+      const iw = imageBoxWidth({ ...t0, w }, ctx.baseSize, ctx.skin);
+      patch = { w, boxAspect: clamp(iw / ih, 0.1, 10) };
+    } else {
+      patch = { w };
+    }
   } else {
     const target = Math.max(3, h0 + (S ? ly : -ly));
     if (t0.type === 'image') {
@@ -69,10 +78,11 @@ export function resizeTile(t0: Tile, h0: number, handle: Handle, dx: number, dy:
     }
   }
 
-  // Keep the opposite edge/corner (or the centre line) fixed on the page.
+  // Keep the opposite edge/corner fixed on the page; side handles keep the
+  // top-left (top handle: bottom-left) so nothing else shifts.
   const t1 = { ...t0, ...patch } as Tile;
   const h1 = height(t1);
-  const anchor = (w: number, h: number) => ({ x: W ? w : E ? 0 : w / 2, y: N ? h : S ? 0 : h / 2 });
+  const anchor = (w: number, h: number) => ({ x: W ? w : 0, y: N ? h : 0 });
   const rotate = (x: number, y: number) => ({ x: x * cos - y * sin, y: x * sin + y * cos });
   const a0 = anchor(t0.w, h0);
   const r0 = rotate(a0.x - t0.w / 2, a0.y - h0 / 2);

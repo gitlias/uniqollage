@@ -17,6 +17,9 @@ interface UiState {
   rightOpen: boolean;
   toggleLeft(): void;
   toggleRight(): void;
+  /** Snap to edges and spacing while moving/resizing (Alt disables temporarily). */
+  snap: boolean;
+  toggleSnap(): void;
   /** Canvas zoom (1 = fit) and view centre in mm (null = centre of the page). */
   zoom: number;
   center: { x: number; y: number } | null;
@@ -65,6 +68,12 @@ export const useUi = create<UiState>((set) => ({
     set((s) => {
       store('uniqollage:right', !s.rightOpen);
       return { rightOpen: !s.rightOpen };
+    }),
+  snap: stored('uniqollage:snap', true),
+  toggleSnap: () =>
+    set((s) => {
+      store('uniqollage:snap', !s.snap);
+      return { snap: !s.snap };
     }),
   zoom: 1,
   center: null,

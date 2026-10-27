@@ -14,10 +14,19 @@ const h = (t: Tile) => renderTile(t, ctx.baseSize, 'light', ctx.skin).h;
 const apply = (t: Tile, handle: Parameters<typeof resizeTile>[2], dx: number, dy: number) => ({ ...t, ...resizeTile(t, h(t), handle, dx, dy, ctx) }) as Tile;
 
 describe('resizeTile', () => {
-  it('left edge: wider, right edge stays', () => {
+  it('left edge: wider, right edge and top stay', () => {
     const t = apply(text, 'w', -10, 0);
     expect(t.w).toBeCloseTo(70);
     expect(t.x + t.w).toBeCloseTo(text.x + text.w);
+    expect(t.y).toBeCloseTo(text.y);
+  });
+  it('right edge on an image crops: left, top and bottom stay', () => {
+    const t = apply(img, 'e', 20, 0) as ImageTile;
+    expect(t.w).toBeCloseTo(80);
+    expect(t.x).toBeCloseTo(img.x);
+    expect(t.y).toBeCloseTo(img.y);
+    expect(h(t)).toBeCloseTo(h(img), 5);
+    expect(t.boxAspect).toBeGreaterThan(1.5);
   });
   it('bottom edge on text: larger text, top stays', () => {
     const t = apply(text, 's', 0, 10);
@@ -37,16 +46,17 @@ describe('resizeTile', () => {
     expect(t.x + t.w).toBeCloseTo(text.x + text.w, 5);
     expect(t.y + h(t)).toBeCloseTo(text.y + h(text), 5);
   });
-  it('keeps the opposite edge fixed on rotated tiles', () => {
+  it('keeps the top-left corner fixed on rotated tiles when dragging the right edge', () => {
     const r = { ...text, rot: 30 };
     const t = apply(r, 'e', 10, 0);
-    // Left-edge midpoint in page coordinates before and after.
-    const leftMid = (u: Tile) => {
+    const topLeft = (u: Tile) => {
       const a = (u.rot * Math.PI) / 180;
       const hh = h(u);
-      return { x: u.x + u.w / 2 - (u.w / 2) * Math.cos(a), y: u.y + hh / 2 - (u.w / 2) * Math.sin(a) };
+      const lx = -u.w / 2;
+      const ly = -hh / 2;
+      return { x: u.x + u.w / 2 + lx * Math.cos(a) - ly * Math.sin(a), y: u.y + hh / 2 + lx * Math.sin(a) + ly * Math.cos(a) };
     };
-    expect(leftMid(t).x).toBeCloseTo(leftMid(r).x, 5);
-    expect(leftMid(t).y).toBeCloseTo(leftMid(r).y, 5);
+    expect(topLeft(t).x).toBeCloseTo(topLeft(r).x, 5);
+    expect(topLeft(t).y).toBeCloseTo(topLeft(r).y, 5);
   });
 });

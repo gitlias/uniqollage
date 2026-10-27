@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { compose } from '../render/collage';
 import { PrimEl, TileView } from './TileView';
@@ -9,10 +9,23 @@ import { useUi } from '../ui';
 import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
 import { HANDLES, resizeTile, type Handle } from '../layout/resize';
 import type { Tile } from '../model';
+import { boundsOf, MOVE_EDGES, snapBox, type Box, type Guide, type SnapEdges } from '../layout/snap';
+import { contentBox } from '../render/collage';
+import { tileHeight } from '../render/tiles';
+
+/** Snap distance in screen pixels. */
+const SNAP_PX = 7;
+
+interface SnapContext {
+  others: Box[];
+  frames: Box[];
+  gap: number;
+  threshold: number;
+}
 
 type Gesture =
-  | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number }
-  | { kind: 'resize'; id: string; sx: number; sy: number; t0: Tile; h0: number; handle: Handle }
+  | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number; t0: Tile; h0: number; snap: SnapContext }
+  | { kind: 'resize'; id: string; sx: number; sy: number; t0: Tile; h0: number; handle: Handle; snap: SnapContext }
   | { kind: 'rotate'; id: string; cx: number; cy: number };
 
 /** Interactive collage editor (SVG in print-area millimetres). */
@@ -24,6 +37,7 @@ export function Canvas() {
   const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | null>(null);
+  const [guides, setGuides] = useState<Guide[]>([]);
 
   const c = compose(project, uiLang);
   const pad = Math.max(c.w, c.h) * 0.06;
@@ -41,6 +55,21 @@ export function Canvas() {
     return m ? pt.matrixTransform(m.inverse()) : pt;
   };
 
+  /** Everything a moving tile can snap to (computed once per gesture). */
+  const snapContext = (id: string): SnapContext => {
+    const svg = svgRef.current!;
+    const r = svg.getBoundingClientRect();
+    const mmPerPx = Math.max(vb.w / r.width, vb.h / r.height);
+    return {
+      others: c.placed.filter((p) => p.tile.id !== id).map((p) => boundsOf(p.tile.x, p.tile.y, p.tile.w, p.h, p.tile.rot)),
+      frames: [{ x: 0, y: 0, w: c.w, h: c.h }, contentBox(project)],
+      gap: project.baseSize * 1.1,
+      threshold: SNAP_PX * mmPerPx,
+    };
+  };
+
+  const snapping = (e: { altKey: boolean }) => useUi.getState().snap && !e.altKey;
+
   const start = (e: React.PointerEvent, g: Gesture) => {
     e.stopPropagation();
     useStore.getState().checkpoint();
@@ -54,10 +83,36 @@ export function Canvas() {
     const p = toLocal(e);
     const { patchTile } = useStore.getState();
     if (g.kind === 'move') {
-      patchTile(g.id, { x: g.x0 + p.x - g.sx, y: g.y0 + p.y - g.sy }, false);
+      let x = g.x0 + p.x - g.sx;
+      let y = g.y0 + p.y - g.sy;
+      if (snapping(e)) {
+        const res = snapBox(boundsOf(x, y, g.t0.w, g.h0, g.t0.rot), g.snap.others, g.snap.frames, { gap: g.snap.gap, threshold: g.snap.threshold, edges: MOVE_EDGES });
+        x += res.dx;
+        y += res.dy;
+        setGuides(res.guides);
+      } else setGuides([]);
+      patchTile(g.id, { x, y }, false);
     } else if (g.kind === 'resize') {
-      const { baseSize, skin } = useStore.getState().project;
-      patchTile(g.id, resizeTile(g.t0, g.h0, g.handle, p.x - g.sx, p.y - g.sy, { baseSize, skin: skin ?? 'vector2010' }), false);
+      const { baseSize, skin = 'vector2010' } = useStore.getState().project;
+      const ctx = { baseSize, skin };
+      let dx = p.x - g.sx;
+      let dy = p.y - g.sy;
+      let patch = resizeTile(g.t0, g.h0, g.handle, dx, dy, ctx);
+      // Snap the dragged edge (unrotated tiles, side handles).
+      const side = g.handle.length === 1;
+      if (snapping(e) && side && !g.t0.rot) {
+        const t1 = { ...g.t0, ...patch } as Tile;
+        const box = { x: t1.x, y: t1.y, w: t1.w, h: tileHeight(t1, t1.w, baseSize, skin) };
+        const edges: SnapEdges = { left: g.handle === 'w', right: g.handle === 'e', top: g.handle === 'n', bottom: g.handle === 's' };
+        const res = snapBox(box, g.snap.others, g.snap.frames, { gap: g.snap.gap, threshold: g.snap.threshold, edges });
+        if (res.dx || res.dy) {
+          dx += res.dx;
+          dy += res.dy;
+          patch = resizeTile(g.t0, g.h0, g.handle, dx, dy, ctx);
+        }
+        setGuides(res.guides);
+      } else setGuides([]);
+      patchTile(g.id, patch, false);
     } else {
       let deg = (Math.atan2(p.y - g.cy, p.x - g.cx) * 180) / Math.PI + 90;
       if (deg > 180) deg -= 360;
@@ -69,6 +124,7 @@ export function Canvas() {
 
   const onUp = () => {
     gesture.current = null;
+    setGuides([]);
   };
 
   // Keyboard shortcuts.
@@ -147,7 +203,7 @@ export function Canvas() {
             onPointerDown={(e) => {
               useStore.getState().select(p.tile.id);
               const pt = toLocal(e);
-              start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y });
+              start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y, t0: p.tile, h0: p.h, snap: snapContext(p.tile.id) });
             }}
           >
             <TileView tile={p.tile} baseSize={project.baseSize} theme={project.theme} skin={project.skin} epoch={epoch} />
@@ -171,6 +227,9 @@ export function Canvas() {
           pointerEvents="none"
         />
         <rect x={0} y={0} width={c.w} height={c.h} fill="none" stroke={overflow ? '#d33' : '#a2a9b1'} strokeDasharray="2 1.5" strokeWidth={0.4} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        {guides.map((g, i) => (
+          <line key={i} className="snap-guide" x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        ))}
         {sel && (
           <g transform={`translate(${sel.tile.x} ${sel.tile.y}) rotate(${sel.tile.rot} ${sel.tile.w / 2} ${sel.h / 2})`}>
             <rect width={sel.tile.w} height={sel.h} fill="none" stroke="#36c" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
@@ -203,7 +262,7 @@ export function Canvas() {
                   height={hs}
                   onPointerDown={(e) => {
                     const pt = toLocal(e);
-                    start(e, { kind: 'resize', id: sel.tile.id, sx: pt.x, sy: pt.y, t0: sel.tile, h0: sel.h, handle });
+                    start(e, { kind: 'resize', id: sel.tile.id, sx: pt.x, sy: pt.y, t0: sel.tile, h0: sel.h, handle, snap: snapContext(sel.tile.id) });
                   }}
                 />
               );
