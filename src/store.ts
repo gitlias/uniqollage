@@ -1,0 +1,161 @@
+import { create } from 'zustand';
+import { newId, type Lang, type Project, type Tile, type TileDraft } from './model';
+import { arrange, shuffled } from './layout/pack';
+import { contentBox } from './render/collage';
+import { printArea } from './products';
+
+export function emptyProject(): Project {
+  return {
+    version: 1,
+    productId: 'tshirt',
+    customArea: { w: 250, h: 320 },
+    baseSize: 3,
+    autoSize: true,
+    credit: true,
+    seed: 1,
+    tiles: [],
+    garment: 'white',
+  };
+}
+
+const HISTORY = 100;
+
+interface State {
+  project: Project;
+  uiLang: Lang;
+  selected: string | null;
+  /** True while the layout is untouched by manual edits; new tiles then trigger a re-layout. */
+  autoLayout: boolean;
+  past: Project[];
+  future: Project[];
+
+  /** Snapshot the current project for undo (call before a gesture). */
+  checkpoint(): void;
+  /** Replace the project. Pass history=false for intermediate gesture updates. */
+  update(fn: (p: Project) => Project, history?: boolean): void;
+  undo(): void;
+  redo(): void;
+  addTiles(drafts: TileDraft[]): void;
+  patchTile(id: string, patch: Partial<Tile>, history?: boolean): void;
+  removeTile(id: string): void;
+  duplicateTile(id: string): void;
+  restack(id: string, where: 'front' | 'back'): void;
+  arrange(shuffle: boolean): void;
+  select(id: string | null): void;
+  setUiLang(l: Lang): void;
+  load(p: Project): void;
+}
+
+function relayout(p: Project, shuffle: boolean): Project {
+  const seed = shuffle ? Math.floor(Math.random() * 2 ** 31) : p.seed;
+  const order = shuffle ? shuffled(p.tiles, seed) : p.tiles;
+  const res = arrange(order, contentBox(p), { baseSize: p.baseSize, autoSize: p.autoSize, seed });
+  return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
+}
+
+export const useStore = create<State>((set, get) => ({
+  project: emptyProject(),
+  uiLang: (() => {
+    try {
+      const v = localStorage.getItem('uniqollage:lang');
+      if (v === 'de' || v === 'en') return v;
+    } catch {
+      /* ignore */
+    }
+    return navigator.language?.startsWith('de') ? 'de' : 'en';
+  })(),
+  selected: null,
+  autoLayout: true,
+  past: [],
+  future: [],
+
+  checkpoint() {
+    set((s) => ({ past: [...s.past.slice(-HISTORY + 1), s.project], future: [] }));
+  },
+  update(fn, history = true) {
+    if (history) get().checkpoint();
+    set((s) => ({ project: fn(s.project) }));
+  },
+  undo() {
+    const { past, project, future } = get();
+    if (!past.length) return;
+    set({ project: past[past.length - 1], past: past.slice(0, -1), future: [project, ...future] });
+  },
+  redo() {
+    const { past, project, future } = get();
+    if (!future.length) return;
+    set({ project: future[0], future: future.slice(1), past: [...past, project] });
+  },
+  addTiles(drafts) {
+    const { project, autoLayout } = get();
+    const area = printArea(project.productId, project.customArea);
+    const tiles: Tile[] = drafts.map(
+      (d, i) =>
+        ({
+          scale: 1,
+          ...d,
+          id: newId(),
+          x: area.w * 0.3 + i * 4,
+          y: area.h * 0.3 + i * 4,
+          w: d.type === 'title' ? area.w * 0.4 : area.w * 0.3,
+          rot: 0,
+        }) as Tile,
+    );
+    get().update((p) => {
+      const next = { ...p, tiles: [...p.tiles, ...tiles] };
+      return autoLayout ? relayout(next, false) : next;
+    });
+    set({ selected: tiles.length === 1 ? tiles[0].id : get().selected });
+  },
+  patchTile(id, patch, history = true) {
+    get().update((p) => ({ ...p, tiles: p.tiles.map((t) => (t.id === id ? ({ ...t, ...patch } as Tile) : t)) }), history);
+    if ('x' in patch || 'y' in patch || 'w' in patch || 'rot' in patch) set({ autoLayout: false });
+  },
+  removeTile(id) {
+    get().update((p) => ({ ...p, tiles: p.tiles.filter((t) => t.id !== id) }));
+    if (get().selected === id) set({ selected: null });
+  },
+  duplicateTile(id) {
+    const t = get().project.tiles.find((x) => x.id === id);
+    if (!t) return;
+    const copy = { ...t, id: newId(), x: t.x + 5, y: t.y + 5 } as Tile;
+    get().update((p) => ({ ...p, tiles: [...p.tiles, copy] }));
+    set({ selected: copy.id, autoLayout: false });
+  },
+  restack(id, where) {
+    get().update((p) => {
+      const t = p.tiles.find((x) => x.id === id);
+      if (!t) return p;
+      const rest = p.tiles.filter((x) => x.id !== id);
+      return { ...p, tiles: where === 'front' ? [...rest, t] : [t, ...rest] };
+    });
+  },
+  arrange(shuffle) {
+    get().update((p) => relayout(p, shuffle));
+    set({ autoLayout: true });
+  },
+  select(id) {
+    set({ selected: id });
+  },
+  setUiLang(l) {
+    try {
+      localStorage.setItem('uniqollage:lang', l);
+    } catch {
+      /* ignore */
+    }
+    set({ uiLang: l });
+  },
+  load(p) {
+    set({ project: p, past: [], future: [], selected: null, autoLayout: false });
+  },
+}));
+
+/** Re-run the layout after a setting change that affects it (product, size, credit strip). */
+export function updateAndRelayout(fn: (p: Project) => Project): void {
+  const s = useStore.getState();
+  s.update((p) => {
+    const next = fn(p);
+    return next.tiles.length ? relayout(next, false) : next;
+  });
+  useStore.setState({ autoLayout: true });
+}
