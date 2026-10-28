@@ -1,6 +1,6 @@
 // Browser smoke test with mocked Wikipedia: node test/e2e/smoke.mjs <baseUrl> <outDir>
 import { createRequire } from 'node:module';
-import { mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { handle } from './fixtures.mjs';
 
 // Uses the globally installed Playwright (CommonJS resolution honours NODE_PATH).
@@ -239,6 +239,11 @@ await step('exports', async () => {
     await dl.saveAs(`${out}/${file}`);
     console.log(`\n   ${file}: ${dl.suggestedFilename()} ${statSync(`${out}/${file}`).size} bytes`);
   }
+  // Every distinct picture of the collage is embedded in the PDF (once), and drawn for every use.
+  const hrefs = await page.locator('.canvas .tile image').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+  const pdf = readFileSync(`${out}/collage.pdf`, 'latin1');
+  const embedded = pdf.match(/\/Subtype \/Image/g)?.length ?? 0;
+  if (embedded !== new Set(hrefs).size) throw new Error(`PDF embeds ${embedded} pictures, the collage has ${new Set(hrefs).size}`);
 });
 
 await step('fill randomly', async () => {

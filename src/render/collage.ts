@@ -119,8 +119,8 @@ let clipSeq = 0;
 
 /**
  * The rectangle a picture of ratio `aspect` must be drawn at to cover box
- * (x, y, w, h) – the overflow is clipped. Done explicitly because svg2pdf
- * ignores preserveAspectRatio="… slice" and would draw the picture uncropped.
+ * (x, y, w, h) – the overflow is clipped. Done explicitly so SVG and PDF
+ * export crop the same way (PDF has no preserveAspectRatio="… slice").
  */
 export function coverRect(x: number, y: number, w: number, h: number, aspect: number) {
   if (!(aspect > 0) || Math.abs(aspect - w / h) < 1e-6) return { x, y, w, h };

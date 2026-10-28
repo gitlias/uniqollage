@@ -1,10 +1,11 @@
 import type { Project, Source, Tile } from '../model';
-import { compose, compositionToSvg, pageBackground, type Composition } from '../render/collage';
+import { compose, compositionToSvg, coverRect, pageBackground, type Composition } from '../render/collage';
 import { areaOf, exportPixels, productById, type UploadTargetId } from '../products';
 
 // Exports. Remote images are fetched (Wikimedia serves CORS headers) and
 // normalised to PNG/JPEG data URLs so the SVG is self-contained, rasterises
-// inside an <img>, and is accepted by jsPDF.
+// inside an <img>, and is accepted by jsPDF. They are scaled down to what the
+// export needs, which keeps memory low (iOS Safari is strict about canvases).
 
 export function download(blob: Blob, name: string): void {
   const a = document.createElement('a');
@@ -32,29 +33,52 @@ function hasAlpha(ctx: CanvasRenderingContext2D, w: number, h: number): boolean 
   return false;
 }
 
-async function normalise(src: string): Promise<string> {
+/** Image as a PNG (if it has transparency) or JPEG data URL, at most `maxWidth` px wide. */
+async function normalise(src: string, maxWidth: number): Promise<string> {
   const img = await loadImage(src);
+  const k = Math.min(1, maxWidth / img.naturalWidth);
   const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(img, 0, 0);
-  return hasAlpha(ctx, canvas.width, canvas.height) ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No canvas available (out of memory?)');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const url = hasAlpha(ctx, canvas.width, canvas.height) ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+    if (url.length < 32) throw new Error('Image encoding failed');
+    return url;
+  } finally {
+    // Free the pixels now: iOS limits the total canvas memory of a page.
+    canvas.width = canvas.height = 0;
+  }
 }
 
-async function inlineImages(c: Composition): Promise<Map<string, string>> {
-  const srcs = new Set<string>();
-  for (const p of c.placed) for (const prim of p.prims) if (prim.t === 'image') srcs.add(prim.href);
-  const map = new Map<string, string>();
-  await Promise.all(
-    [...srcs].map(async (src) => {
-      try {
-        map.set(src, await normalise(src));
-      } catch (e) {
-        console.warn(e);
+/** Print resolution for vector exports. */
+const VECTOR_PX_PER_MM = 300 / 25.4;
+
+/**
+ * Data URLs for all pictures of the composition, each scaled to the largest
+ * size it is drawn at × `pxPerMm`. Converted one after another to keep the
+ * peak memory low.
+ */
+async function inlineImages(c: Composition, pxPerMm = VECTOR_PX_PER_MM): Promise<Map<string, string>> {
+  const widest = new Map<string, number>();
+  for (const p of c.placed)
+    for (const prim of p.prims)
+      if (prim.t === 'image') {
+        // Cropped pictures are drawn wider than their box.
+        const drawn = coverRect(prim.x, prim.y, prim.w, prim.h, prim.aspect).w;
+        widest.set(prim.href, Math.max(widest.get(prim.href) ?? 0, drawn));
       }
-    }),
-  );
+  const map = new Map<string, string>();
+  for (const [src, mm] of widest) {
+    try {
+      map.set(src, await normalise(src, Math.max(64, Math.ceil(mm * pxPerMm))));
+    } catch (e) {
+      console.warn(e);
+    }
+  }
   return map;
 }
 
@@ -94,7 +118,8 @@ export async function renderPng(
     throw new Error(`${px.w} × ${px.h} px is too large for the browser – use 150 dpi or the PDF export.`);
   }
   const c = compose(p, lang);
-  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c), background: opts.background });
+  // Pictures only need the export's own resolution (with a little headroom).
+  const svg = compositionToSvg(c, { hrefMap: await inlineImages(c, (px.w / c.w) * 1.25), background: opts.background });
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const img = await loadImage(url);
@@ -124,25 +149,19 @@ export async function exportPng(
   return blob.size;
 }
 
-export async function exportPdf(p: Project, lang: 'en' | 'de', bleed = 0): Promise<void> {
-  const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
+export async function renderPdf(p: Project, lang: 'en' | 'de', bleed = 0): Promise<Blob> {
+  const [{ jsPDF }, { drawComposition }] = await Promise.all([import('jspdf'), import('./pdf')]);
   const c = compose(p, lang);
-  const svgText = compositionToSvg(c, { hrefMap: await inlineImages(c), background: pageBackground(p), bleed });
-  const el = new DOMParser().parseFromString(svgText, 'image/svg+xml').documentElement as unknown as SVGSVGElement;
-  // svg2pdf needs the element in the document to resolve styles.
-  const holder = document.createElement('div');
-  holder.style.cssText = 'position:fixed;left:-99999px;top:0;';
-  holder.appendChild(el);
-  document.body.appendChild(holder);
-  try {
-    const W = c.w + 2 * bleed;
-    const H = c.h + 2 * bleed;
-    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
-    await svg2pdf(el, doc, { x: 0, y: 0, width: W, height: H });
-    download(doc.output('blob'), `${baseName(p)}.pdf`);
-  } finally {
-    holder.remove();
-  }
+  const hrefMap = await inlineImages(c);
+  const W = c.w + 2 * bleed;
+  const H = c.h + 2 * bleed;
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
+  drawComposition(doc, c, { hrefMap, background: pageBackground(p), bleed });
+  return doc.output('blob');
+}
+
+export async function exportPdf(p: Project, lang: 'en' | 'de', bleed = 0): Promise<void> {
+  download(await renderPdf(p, lang, bleed), `${baseName(p)}.pdf`);
 }
 
 export function attributionText(p: Project, lang: 'en' | 'de'): string {

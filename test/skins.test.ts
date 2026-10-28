@@ -90,7 +90,7 @@ describe('cards', () => {
 });
 
 describe('cropped images in exports', () => {
-  it('draws the picture at its own ratio and clips it to the box (svg2pdf ignores "slice")', async () => {
+  it('draws the picture at its own ratio and clips it to the box (the same way in SVG and PDF)', async () => {
     const { coverRect, compositionToSvg } = await import('../src/render/collage');
     // Portrait 1:2 picture in a 3:2 box: drawn full width, centred vertically, taller than the box.
     expect(coverRect(0, 0, 60, 40, 0.5)).toEqual({ x: 0, y: -40, w: 60, h: 120 });
