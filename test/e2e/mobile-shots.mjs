@@ -55,6 +55,8 @@ for (let i = 1; i <= 5; i++) await touch('touchMove', box.x + box.width / 2 - i 
 await touch('touchEnd');
 if ((await page.getAttribute('svg.canvas', 'viewBox')) === vb0) throw new Error('hand tool did not pan on touch');
 await shot('4b-hand');
+// (Chromium drops a tap that follows a swipe within a few ms.)
+await page.waitForTimeout(400);
 await page.tap('.tool-picker button >> nth=0');
 await page.tap('.zoom-level');
 
