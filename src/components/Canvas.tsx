@@ -6,7 +6,7 @@ import { garmentColor, isPoster } from '../products';
 import { PALETTES } from '../render/tiles';
 import { useT } from '../i18n';
 import { useUi } from '../ui';
-import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
+import { ToolPicker, useViewBox, useZoomGestures, ZoomControls } from './zoom';
 import { PHONE, useMedia } from './media';
 import { HANDLES, resizeTile, type Handle } from '../layout/resize';
 import type { Tile } from '../model';
@@ -53,6 +53,8 @@ export function Canvas() {
     useStore.getState().update((p) => ({ ...p, tiles: p.tiles.map((x) => (x.id === g.id ? g.t0 : x)) }), false);
   });
   const phone = useMedia(PHONE);
+  const tool = useUi((s) => (s.tempPan ? 'pan' : s.tool));
+  const panTool = tool === 'pan';
   const coarse = useMedia('(pointer: coarse)');
   const sel = c.placed.find((p) => p.tile.id === selected);
   const margin = marginOf(project);
@@ -146,6 +148,15 @@ export function Canvas() {
       if (el.closest('input, textarea, select, [contenteditable]')) return;
       const s = useStore.getState();
       const mod = e.ctrlKey || e.metaKey;
+      if (!mod && !e.altKey) {
+        if (e.code === 'Space' && !el.closest('button, a')) {
+          e.preventDefault();
+          if (!e.repeat) useUi.getState().setTempPan(true);
+          return;
+        }
+        if (e.key === 'v' || e.key === 'V') return useUi.getState().setTool('move');
+        if (e.key === 'h' || e.key === 'H') return useUi.getState().setTool('pan');
+      }
       if (mod && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0')) {
         e.preventDefault();
         const { zoom, setZoom } = useUi.getState();
@@ -182,8 +193,16 @@ export function Canvas() {
         s.patchTile(tile.id, { x: tile.x + dx, y: tile.y + dy });
       }
     };
+    const onKeyUp = (e: KeyboardEvent) => e.code === 'Space' && useUi.getState().setTempPan(false);
+    const onBlur = () => useUi.getState().setTempPan(false);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
   }, []);
 
   // Handle size, constant on screen (larger for fingers).
@@ -193,13 +212,14 @@ export function Canvas() {
     <div className="canvas-wrap">
       <svg
         ref={svgRef}
-        className="canvas"
+        className={`canvas${panTool ? ' tool-pan' : ''}`}
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
         onPointerDown={(e) => {
-          useStore.getState().select(null);
+          // The hand tool keeps the selection; otherwise a click on the background clears it.
+          if (!panTool) useStore.getState().select(null);
           startPan(e);
         }}
       >
@@ -214,6 +234,8 @@ export function Canvas() {
             key={p.tile.id}
             className="tile"
             onPointerDown={(e) => {
+              // Hand tool: dragging a tile moves the view instead (the svg handler pans).
+              if (panTool) return;
               useStore.getState().select(p.tile.id);
               const pt = toLocal(e);
               start(e, { kind: 'move', id: p.tile.id, sx: pt.x, sy: pt.y, x0: p.tile.x, y0: p.tile.y, t0: p.tile, h0: p.h, snap: snapContext(p.tile.id) });
@@ -246,7 +268,7 @@ export function Canvas() {
         {guides.map((g, i) => (
           <line key={i} className="snap-guide" x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
         ))}
-        {sel && (
+        {sel && !panTool && (
           <g transform={`translate(${sel.tile.x} ${sel.tile.y}) rotate(${sel.tile.rot} ${sel.tile.w / 2} ${sel.h / 2})`}>
             <rect width={sel.tile.w} height={sel.h} fill="none" stroke="#36c" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
             <line x1={sel.tile.w / 2} y1={0} x2={sel.tile.w / 2} y2={-hs * 2.5} stroke="#36c" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
@@ -287,8 +309,9 @@ export function Canvas() {
           </g>
         )}
       </svg>
+      <ToolPicker />
       <ZoomControls />
-      {phone && sel && (
+      {phone && sel && !panTool && (
         <div className="tile-actions">
           <button onClick={() => useUi.getState().setMobilePane('tools')}>✎ {t('editTile')}</button>
           <button onClick={() => useStore.getState().duplicateTile(sel.tile.id)}>⧉ {t('duplicate')}</button>

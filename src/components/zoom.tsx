@@ -156,6 +156,31 @@ export function useZoomGestures(svgRef: RefObject<SVGSVGElement | null>, vb: Rec
   };
 }
 
+/** Tool picker: move tiles or drag the view. */
+export function ToolPicker() {
+  const t = useT();
+  const tool = useUi((s) => s.tool);
+  const temp = useUi((s) => s.tempPan);
+  const active = temp ? 'pan' : tool;
+  return (
+    <div className="tool-picker" role="radiogroup" aria-label="Tool">
+      <button role="radio" aria-checked={active === 'move'} className={active === 'move' ? 'on' : ''} onClick={() => useUi.getState().setTool('move')} title={t('toolMove')} aria-label={t('toolMove')}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
+          <path d="M4 2l11 8.5-4.8.6 2.9 5.6-2.2 1.1-2.9-5.6L4 15.5z" fill="currentColor" />
+        </svg>
+      </button>
+      <button role="radio" aria-checked={active === 'pan'} className={active === 'pan' ? 'on' : ''} onClick={() => useUi.getState().setTool('pan')} title={t('toolPan')} aria-label={t('toolPan')}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
+          <path
+            d="M8 2.5a1.2 1.2 0 0 1 2.4 0V9h.6V3.6a1.2 1.2 0 0 1 2.4 0V9.5h.6V5.4a1.2 1.2 0 0 1 2.4 0V12c0 3.3-2.4 6-5.6 6-2.3 0-3.7-1-4.9-2.8L3.3 11a1.2 1.2 0 0 1 2-1.3L7.4 12V4a1.2 1.2 0 0 1 .6-1z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /** Zoom buttons shown in the corner of the canvas. */
 export function ZoomControls() {
   const t = useT();

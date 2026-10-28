@@ -988,6 +988,42 @@ button.add-like {
 .zoom-controls button:last-child {
   border-radius: 0 2px 2px 0;
 }
+.tool-picker {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.tool-picker button {
+  border-radius: 0;
+  margin-left: -1px;
+  min-width: 36px;
+  padding: 0 8px;
+  color: var(--ink);
+}
+.tool-picker button:first-child {
+  border-radius: 2px 0 0 2px;
+  margin-left: 0;
+}
+.tool-picker button:last-child {
+  border-radius: 0 2px 2px 0;
+}
+.tool-picker button.on,
+.tool-picker button.on:hover:not(:disabled) {
+  background: var(--progressive);
+  border-color: var(--progressive);
+  color: #fff;
+}
+.canvas.tool-pan,
+.canvas.tool-pan .tile {
+  cursor: grab;
+}
+.canvas.tool-pan.panning,
+.canvas.tool-pan.panning .tile {
+  cursor: grabbing;
+}
 .zoom-level {
   min-width: 64px;
   font-variant-numeric: tabular-nums;
@@ -1221,6 +1257,13 @@ button.add-like {
   .zoom-controls {
     right: 8px;
     bottom: 8px;
+  }
+  .tool-picker {
+    left: 8px;
+    bottom: 8px;
+  }
+  .tool-picker button {
+    min-width: 44px;
   }
   .canvas-empty {
     top: 30%;

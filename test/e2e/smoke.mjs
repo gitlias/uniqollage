@@ -284,6 +284,32 @@ await step('collapse panels and zoom the canvas', async () => {
   const vb3 = await page.getAttribute('svg.canvas', 'viewBox');
   if (vb3 === vb2) throw new Error('drag did not pan');
   await page.screenshot({ path: `${out}/zoomed-collapsed.png` });
+
+  // Hand tool: dragging on a tile pans the view and leaves the tile where it is.
+  const tiles = () => page.locator('.canvas .tile').count();
+  const pos = () => page.locator('.canvas .tile .hit').evaluateAll((els) => els.map((e) => e.getAttribute('transform')).join('|'));
+  await page.click('.tool-picker button >> nth=1');
+  const p0 = await pos();
+  const vb4 = await page.getAttribute('svg.canvas', 'viewBox');
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  if (!(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.tile'), [cx, cy]))) throw new Error('no tile under the drag start');
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx - 80, cy - 60, { steps: 4 });
+  await page.mouse.up();
+  if ((await page.getAttribute('svg.canvas', 'viewBox')) === vb4) throw new Error('hand tool did not pan');
+  if ((await pos()) !== p0) throw new Error('hand tool moved a tile');
+  if (await page.locator('.canvas .handle').count()) throw new Error('handles shown with the hand tool');
+  // V switches back; holding Space pans temporarily.
+  await page.keyboard.press('v');
+  if (!(await page.locator('.tool-picker button >> nth=0').getAttribute('class')).includes('on')) throw new Error('V did not select the move tool');
+  await page.keyboard.down('Space');
+  if (!(await page.locator('svg.canvas').getAttribute('class')).includes('tool-pan')) throw new Error('Space did not switch to the hand');
+  await page.keyboard.up('Space');
+  if ((await page.locator('svg.canvas').getAttribute('class')).includes('tool-pan')) throw new Error('hand stayed after Space');
+  if ((await tiles()) < 1) throw new Error('tiles lost');
+
   await page.click('.zoom-level');
   if ((await page.getAttribute('svg.canvas', 'viewBox')) !== vb0) throw new Error('fit did not reset');
   await page.click('.panel-rail.left');

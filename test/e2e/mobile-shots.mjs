@@ -42,6 +42,22 @@ await page.waitForTimeout(300);
 await shot('4-canvas');
 await noHScroll('canvas');
 
+// Hand tool: a swipe over a tile moves the zoomed-in view, not the tile.
+await page.tap('.zoom-controls button >> nth=2');
+await page.tap('.zoom-controls button >> nth=2');
+await page.tap('.tool-picker button >> nth=1');
+const vb0 = await page.getAttribute('svg.canvas', 'viewBox');
+const box = await page.locator('svg.canvas').boundingBox();
+const cdp = await ctx.newCDPSession(page);
+const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+await touch('touchStart', box.x + box.width / 2, box.y + box.height / 2);
+for (let i = 1; i <= 5; i++) await touch('touchMove', box.x + box.width / 2 - i * 20, box.y + box.height / 2 - i * 15);
+await touch('touchEnd');
+if ((await page.getAttribute('svg.canvas', 'viewBox')) === vb0) throw new Error('hand tool did not pan on touch');
+await shot('4b-hand');
+await page.tap('.tool-picker button >> nth=0');
+await page.tap('.zoom-level');
+
 // Select a tile, then edit it.
 await page.locator('.canvas .tile .hit').nth(1).tap();
 await page.waitForSelector('.tile-actions');

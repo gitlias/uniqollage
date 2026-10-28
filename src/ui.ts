@@ -35,6 +35,12 @@ interface UiState {
   setView(v: 'editor' | 'mockup'): void;
   openArticle(lang: Lang, title: string): void;
   setExportOpen(v: boolean): void;
+  /** Canvas tool: select and move tiles, or drag the view (hand). */
+  tool: 'move' | 'pan';
+  setTool(t: 'move' | 'pan'): void;
+  /** Space held: hand tool until released. */
+  tempPan: boolean;
+  setTempPan(v: boolean): void;
   mobilePane: MobilePane;
   setMobilePane(p: MobilePane): void;
 }
@@ -93,6 +99,10 @@ export const useUi = create<UiState>((set) => ({
   setView: (view) => set({ view }),
   openArticle: (lang, title) => set({ tab: 'search', mobilePane: 'sources', openRequest: { lang, title, nonce: Date.now() } }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
+  tool: 'move',
+  setTool: (tool) => set({ tool }),
+  tempPan: false,
+  setTempPan: (tempPan) => set({ tempPan }),
   mobilePane: 'canvas',
   setMobilePane: (mobilePane) => set({ mobilePane, settingsOpen: false }),
 }));
