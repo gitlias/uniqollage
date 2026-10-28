@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { Lang } from './model';
 
 export type SourceTab = 'search' | 'dyk' | 'random' | 'commons' | 'upload';
+/** On phones only one area is shown at a time. */
+export type MobilePane = 'sources' | 'canvas' | 'tools';
 
 interface UiState {
   tab: SourceTab;
@@ -33,6 +35,8 @@ interface UiState {
   setView(v: 'editor' | 'mockup'): void;
   openArticle(lang: Lang, title: string): void;
   setExportOpen(v: boolean): void;
+  mobilePane: MobilePane;
+  setMobilePane(p: MobilePane): void;
 }
 
 function stored(key: string, fallback: boolean): boolean {
@@ -84,9 +88,11 @@ export const useUi = create<UiState>((set) => ({
   setZoom: (zoom, center) => set((s) => ({ zoom: Math.min(16, Math.max(1, zoom)), center: zoom <= 1 ? null : center === undefined ? s.center : center })),
   setCenter: (center) => set({ center }),
   setFillOpen: (fillOpen) => set({ fillOpen }),
-  search: (q) => set({ tab: 'search', searchRequest: { q, nonce: Date.now() } }),
+  search: (q) => set({ tab: 'search', mobilePane: 'sources', searchRequest: { q, nonce: Date.now() } }),
   setTab: (tab) => set({ tab }),
   setView: (view) => set({ view }),
-  openArticle: (lang, title) => set({ tab: 'search', openRequest: { lang, title, nonce: Date.now() } }),
+  openArticle: (lang, title) => set({ tab: 'search', mobilePane: 'sources', openRequest: { lang, title, nonce: Date.now() } }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
+  mobilePane: 'canvas',
+  setMobilePane: (mobilePane) => set({ mobilePane, settingsOpen: false }),
 }));

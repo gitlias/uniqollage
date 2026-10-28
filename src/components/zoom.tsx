@@ -30,12 +30,75 @@ function unitsPerPixel(svg: SVGSVGElement, vb: Rect): number {
 }
 
 /**
- * Ctrl/⌘ + wheel (or pinch) zooms around the pointer, plain wheel pans when
- * zoomed in. Returns a pan starter for drags on the background.
+ * Ctrl/⌘ + wheel (or trackpad pinch) zooms around the pointer, plain wheel
+ * pans when zoomed in; on touch screens two fingers pinch-zoom and pan.
+ * `onPinch` is called when a two-finger gesture starts (to cancel a tile drag
+ * begun by the first finger). Returns a pan starter for drags on the background.
  */
-export function useZoomGestures(svgRef: RefObject<SVGSVGElement | null>, vb: Rect) {
+export function useZoomGestures(svgRef: RefObject<SVGSVGElement | null>, vb: Rect, onPinch?: () => void) {
   const vbRef = useRef(vb);
   vbRef.current = vb;
+  const onPinchRef = useRef(onPinch);
+  onPinchRef.current = onPinch;
+  const pinching = useRef(false);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const pts = new Map<number, { x: number; y: number }>();
+    let start: { d: number; zoom: number; point: { x: number; y: number } } | null = null;
+    const pair = () => {
+      const [a, b] = [...pts.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    };
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size !== 2) return;
+      // Second finger: from now on this is a pinch, not a tile drag.
+      e.stopPropagation();
+      onPinchRef.current?.();
+      const { d, mid } = pair();
+      const v = vbRef.current;
+      const r = svg.getBoundingClientRect();
+      const upp = unitsPerPixel(svg, v);
+      // The page point under the fingers stays under them.
+      start = {
+        d: Math.max(d, 1),
+        zoom: useUi.getState().zoom,
+        point: { x: v.x + v.w / 2 + (mid.x - (r.left + r.width / 2)) * upp, y: v.y + v.h / 2 + (mid.y - (r.top + r.height / 2)) * upp },
+      };
+      pinching.current = true;
+    };
+    const move = (e: PointerEvent) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!start || pts.size < 2) return;
+      const { d, mid } = pair();
+      const zoom = Math.min(16, Math.max(1, (start.zoom * d) / start.d));
+      const v = vbRef.current;
+      const r = svg.getBoundingClientRect();
+      const upp = unitsPerPixel(svg, v) * (useUi.getState().zoom / zoom);
+      useUi.getState().setZoom(zoom, { x: start.point.x - (mid.x - (r.left + r.width / 2)) * upp, y: start.point.y - (mid.y - (r.top + r.height / 2)) * upp });
+    };
+    const up = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) {
+        start = null;
+        pinching.current = false;
+      }
+    };
+    svg.addEventListener('pointerdown', down, true);
+    svg.addEventListener('pointermove', move, true);
+    svg.addEventListener('pointerup', up, true);
+    svg.addEventListener('pointercancel', up, true);
+    return () => {
+      svg.removeEventListener('pointerdown', down, true);
+      svg.removeEventListener('pointermove', move, true);
+      svg.removeEventListener('pointerup', up, true);
+      svg.removeEventListener('pointercancel', up, true);
+    };
+  }, [svgRef]);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -75,8 +138,12 @@ export function useZoomGestures(svgRef: RefObject<SVGSVGElement | null>, vb: Rec
     const c0 = { x: v.x + v.w / 2, y: v.y + v.h / 2 };
     svg.setPointerCapture(e.pointerId);
     svg.classList.add('panning');
-    const move = (ev: PointerEvent) => useUi.getState().setCenter({ x: c0.x - (ev.clientX - sx) * upp, y: c0.y - (ev.clientY - sy) * upp });
-    const up = () => {
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId || pinching.current) return;
+      useUi.getState().setCenter({ x: c0.x - (ev.clientX - sx) * upp, y: c0.y - (ev.clientY - sy) * upp });
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
       svg.classList.remove('panning');
       svg.removeEventListener('pointermove', move);
       svg.removeEventListener('pointerup', up);

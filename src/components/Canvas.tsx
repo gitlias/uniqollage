@@ -7,6 +7,7 @@ import { PALETTES } from '../render/tiles';
 import { useT } from '../i18n';
 import { useUi } from '../ui';
 import { useViewBox, useZoomGestures, ZoomControls } from './zoom';
+import { PHONE, useMedia } from './media';
 import { HANDLES, resizeTile, type Handle } from '../layout/resize';
 import type { Tile } from '../model';
 import { boundsOf, MOVE_EDGES, snapBox, type Box, type Guide, type SnapEdges } from '../layout/snap';
@@ -27,7 +28,7 @@ interface SnapContext {
 type Gesture =
   | { kind: 'move'; id: string; sx: number; sy: number; x0: number; y0: number; t0: Tile; h0: number; snap: SnapContext }
   | { kind: 'resize'; id: string; sx: number; sy: number; t0: Tile; h0: number; handle: Handle; snap: SnapContext }
-  | { kind: 'rotate'; id: string; cx: number; cy: number };
+  | { kind: 'rotate'; id: string; cx: number; cy: number; t0: Tile };
 
 /** Interactive collage editor (SVG in print-area millimetres). */
 export function Canvas() {
@@ -43,7 +44,16 @@ export function Canvas() {
   const c = compose(project, uiLang);
   const pad = Math.max(c.w, c.h) * 0.06;
   const vb = useViewBox({ x: -pad, y: -pad, w: c.w + 2 * pad, h: c.h + 2 * pad });
-  const startPan = useZoomGestures(svgRef, vb);
+  // A second finger turns a tile drag into a pinch: put the tile back.
+  const startPan = useZoomGestures(svgRef, vb, () => {
+    const g = gesture.current;
+    if (!g) return;
+    gesture.current = null;
+    setGuides([]);
+    useStore.getState().update((p) => ({ ...p, tiles: p.tiles.map((x) => (x.id === g.id ? g.t0 : x)) }), false);
+  });
+  const phone = useMedia(PHONE);
+  const coarse = useMedia('(pointer: coarse)');
   const sel = c.placed.find((p) => p.tile.id === selected);
   const margin = marginOf(project);
   const overflow = c.placed.some((p) => p.tile.y + p.h > c.h + 0.5 || p.tile.x + p.tile.w > c.w + 0.5 || p.tile.x < -0.5 || p.tile.y < -0.5);
@@ -176,7 +186,8 @@ export function Canvas() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const hs = Math.max(vb.w, vb.h) * 0.012; // handle size, constant on screen
+  // Handle size, constant on screen (larger for fingers).
+  const hs = Math.max(vb.w, vb.h) * (coarse ? 0.026 : 0.012);
 
   return (
     <div className="canvas-wrap">
@@ -250,6 +261,7 @@ export function Canvas() {
                   id: sel.tile.id,
                   cx: sel.tile.x + sel.tile.w / 2,
                   cy: sel.tile.y + sel.h / 2,
+                  t0: sel.tile,
                 })
               }
             />
@@ -276,6 +288,15 @@ export function Canvas() {
         )}
       </svg>
       <ZoomControls />
+      {phone && sel && (
+        <div className="tile-actions">
+          <button onClick={() => useUi.getState().setMobilePane('tools')}>✎ {t('editTile')}</button>
+          <button onClick={() => useStore.getState().duplicateTile(sel.tile.id)}>⧉ {t('duplicate')}</button>
+          <button className="destructive" onClick={() => useStore.getState().removeTile(sel.tile.id)}>
+            🗑 {t('delete')}
+          </button>
+        </div>
+      )}
       {!project.tiles.length && (
         <div className="canvas-empty">
           <p>{t('empty')}</p>

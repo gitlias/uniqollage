@@ -70,6 +70,10 @@ export function SettingsPanel() {
 
   return (
     <div className="settings-panel" ref={ref} role="dialog" aria-label={t('settings')}>
+      <div className="sheet-head">
+        <h3>⚙ {t('settings')}</h3>
+        <button onClick={close}>✕ {t('close')}</button>
+      </div>
       <section>
         <h4>{t('settingsProduct')}</h4>
         <label>

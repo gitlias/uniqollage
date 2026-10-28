@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { PHONE, useMedia } from './components/media';
 import { useStore, emptyProject } from './store';
-import { useUi, type SourceTab } from './ui';
+import { useUi, type MobilePane, type SourceTab } from './ui';
 import { useT, type TKey } from './i18n';
 import { Canvas } from './components/Canvas';
 import { Mockup } from './components/Mockup';
@@ -48,6 +49,71 @@ function PanelRail({ side, label }: { side: 'left' | 'right'; label: string }) {
   );
 }
 
+function Footer() {
+  const t = useT();
+  return (
+    <footer className="footer">
+      <span>{t('footerLicense')}</span>{' '}
+      <span>
+        {t('footerSource')}{' '}
+        <a href={REPO_URL} target="_blank" rel="noreferrer">
+          {t('sourceCode')}
+        </a>
+      </span>
+    </footer>
+  );
+}
+
+/** Phone navigation between the three areas. */
+function MobileNav() {
+  const t = useT();
+  const pane = useUi((s) => s.mobilePane);
+  const tiles = useStore((s) => s.project.tiles.length);
+  const items: [MobilePane, string, string][] = [
+    ['sources', '📚', t('factBank')],
+    ['canvas', '▦', `${t('collage')} (${tiles})`],
+    ['tools', '✎', t('tools')],
+  ];
+  return (
+    <nav className="mobile-nav" aria-label={t('menu')}>
+      {items.map(([id, icon, label]) => (
+        <button key={id} className={pane === id ? 'on' : ''} aria-current={pane === id} onClick={() => useUi.getState().setMobilePane(id)}>
+          <span aria-hidden>{icon}</span>
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** On phones: confirm additions made outside the collage view, with a shortcut to it. */
+function AddedToast() {
+  const t = useT();
+  const count = useStore((s) => s.project.tiles.length);
+  const pane = useUi((s) => s.mobilePane);
+  const last = useRef(count);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (count > last.current && pane !== 'canvas') setShown(Date.now());
+    else if (pane === 'canvas') setShown(0);
+    last.current = count;
+  }, [count, pane]);
+  useEffect(() => {
+    if (!shown) return;
+    const id = setTimeout(() => setShown(0), 2500);
+    return () => clearTimeout(id);
+  }, [shown]);
+  if (!shown || pane === 'canvas') return null;
+  return (
+    <div className="toast" role="status">
+      ✓ {t('addedToCollage')}
+      <button className="quiet" onClick={() => useUi.getState().setMobilePane('canvas')}>
+        {t('showCollage')} →
+      </button>
+    </div>
+  );
+}
+
 export function App() {
   const t = useT();
   const uiLang = useStore((s) => s.uiLang);
@@ -63,6 +129,12 @@ export function App() {
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
   const fillOpen = useUi((s) => s.fillOpen);
+  const pane = useUi((s) => s.mobilePane);
+  const phone = useMedia(PHONE);
+  // On phones the areas are switched with the bottom bar instead of collapsed.
+  const leftShown = leftOpen || phone;
+  const rightShown = rightOpen || phone;
+  const [menuOpen, setMenuOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [headerQ, setHeaderQ] = useState('');
   // DYK and Random fetch on mount: mount each tab on first visit, then keep it
@@ -71,7 +143,7 @@ export function App() {
   useEffect(() => setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab))), [tab]);
 
   return (
-    <div className={`app${leftOpen ? '' : ' left-collapsed'}${rightOpen ? '' : ' right-collapsed'}`}>
+    <div className={`app pane-${pane}${leftShown ? '' : ' left-collapsed'}${rightShown ? '' : ' right-collapsed'}`}>
       <header className="vector-header">
         <div className="header-start">
           <span className="wordmark" aria-label="Uniqollage">
@@ -100,17 +172,25 @@ export function App() {
             <span aria-hidden>文A</span>
             <LangToggle value={uiLang} onChange={setUiLang} />
           </span>
-          <button
-            className="quiet"
-            onClick={() => {
-              if (confirm(t('confirmNew'))) useStore.getState().load(emptyProject());
-            }}
-          >
-            {t('newProject')}
+          <button className="quiet menu-toggle" aria-expanded={menuOpen} aria-label={t('menu')} title={t('menu')} onClick={() => setMenuOpen(!menuOpen)}>
+            ⋯
           </button>
-          <button className="quiet" onClick={() => fileInput.current?.click()}>
-            {t('importProject')}
-          </button>
+          <div className={`header-actions${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(false)}>
+            <button
+              className="quiet"
+              onClick={() => {
+                if (confirm(t('confirmNew'))) useStore.getState().load(emptyProject());
+              }}
+            >
+              {t('newProject')}
+            </button>
+            <button className="quiet" onClick={() => fileInput.current?.click()}>
+              {t('importProject')}
+            </button>
+            <button className="quiet" onClick={() => exportProject(useStore.getState().project)}>
+              {t('exportProject')}
+            </button>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -129,17 +209,14 @@ export function App() {
               }
             }}
           />
-          <button className="quiet" onClick={() => exportProject(useStore.getState().project)}>
-            {t('exportProject')}
-          </button>
           <button className="primary" onClick={() => useUi.getState().setExportOpen(true)}>
             {t('export')}
           </button>
         </nav>
       </header>
 
-      {!leftOpen && <PanelRail side="left" label={t('factBank')} />}
-      <aside className="sources vector-menu" hidden={!leftOpen}>
+      {!leftShown && <PanelRail side="left" label={t('factBank')} />}
+      <aside className="sources vector-menu" hidden={!leftShown}>
         <div className="menu-heading">
           {t('factBank')}
           <button className="panel-toggle" onClick={() => useUi.getState().toggleLeft()} title={t('collapse')} aria-label={t('collapse')}>
@@ -191,18 +268,12 @@ export function App() {
         <div className="site-sub">{t('siteSub')}</div>
         <Toolbar />
         {view === 'editor' ? <Canvas /> : <Mockup />}
-        <footer className="footer">
-          <span>{t('footerLicense')}</span>{' '}
-          <span>
-            {t('footerSource')}{' '}
-            <a href={REPO_URL} target="_blank" rel="noreferrer">
-              {t('sourceCode')}
-            </a>
-          </span>
-        </footer>
+        {!phone && <Footer />}
       </main>
 
-      {rightOpen ? <Inspector /> : <PanelRail side="right" label={t('tools')} />}
+      {rightShown ? <Inspector>{phone && <Footer />}</Inspector> : <PanelRail side="right" label={t('tools')} />}
+      {phone && <MobileNav />}
+      {phone && <AddedToast />}
       {exportOpen && <ExportDialog />}
       {fillOpen && <FillDialog />}
     </div>

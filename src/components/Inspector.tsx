@@ -21,7 +21,7 @@ function label(t: Tile): string {
   }
 }
 
-export function Inspector() {
+export function Inspector({ children }: { children?: React.ReactNode }) {
   const t = useT();
   const tiles = useStore((s) => s.project.tiles);
   const selected = useStore((s) => s.selected);
@@ -206,6 +206,7 @@ export function Inspector() {
           </li>
         ))}
       </ul>
+      {children}
     </aside>
   );
 }
