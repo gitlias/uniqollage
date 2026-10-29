@@ -139,6 +139,8 @@ export interface Project {
   neat?: number;
   /** Spare sentences for filler text (collected by random fill and article additions). */
   reserve?: ReserveItem[];
+  /** false = never crop pictures to fill space (the auto layout leaves gaps instead). Default true. */
+  cropImages?: boolean;
   /** Spacing between tiles in mm; undefined = automatic (follows the text size). */
   gap?: number;
   /** Empty margin around the collage inside the print area / poster, mm (all products). */

@@ -40,6 +40,8 @@ export interface LayoutOptions {
   neat?: number;
   reserve?: ReserveItem[];
   optimize?: Partial<Optimize>;
+  /** false: pictures are always shown whole (default true). */
+  cropImages?: boolean;
 }
 
 /** Article a tile belongs to (for grouping), if any. */
@@ -165,7 +167,7 @@ export function arrangeTiles(tiles: Tile[], area: Box, opts: LayoutOptions): Arr
   const diag = Math.hypot(area.w, area.h);
 
   const run = (order: Tile[], seed: number, hint?: number): ArrangeResult => {
-    const common = { baseSize: opts.baseSize, autoSize: opts.autoSize, gap: opts.gap, meter };
+    const common = { baseSize: opts.baseSize, autoSize: opts.autoSize, gap: opts.gap, meter, crop: opts.cropImages !== false };
     switch (mode) {
       case 'rows':
         return rowsLayout(order, area, { ...common, neat, hint });

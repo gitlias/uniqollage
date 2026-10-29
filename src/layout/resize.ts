@@ -6,6 +6,8 @@ import { imageBoxWidth, tileHeight } from '../render/tiles';
 // - left/right edges: width; text reflows, images crop (their height stays)
 // - top/bottom edges: images crop (box aspect); text-like tiles change their
 //   text size until the tile reaches the dragged height
+// With cropping switched off, images keep their aspect ratio on every handle:
+// the dragged edge scales the whole picture.
 // - corners: scale width and text size together
 // Only the dragged edge moves: the opposite edge stays put and side handles
 // keep the top (or, for the top handle, the bottom) fixed – also when rotated.
@@ -36,7 +38,14 @@ function scaleForHeight(t: Tile, target: number, height: (t: Tile) => number): n
  * New placement/size for dragging `handle` of tile `t0` (rendered height `h0`)
  * by (dx, dy) page millimetres.
  */
-export function resizeTile(orig: Tile, h0: number, handle: Handle, dx: number, dy: number, ctx: { baseSize: number; skin: Skin }): Partial<Tile> {
+export function resizeTile(
+  orig: Tile,
+  h0: number,
+  handle: Handle,
+  dx: number,
+  dy: number,
+  ctx: { baseSize: number; skin: Skin; crop?: boolean },
+): Partial<Tile> {
   // Growth from the neat layout becomes part of the tile's own scale.
   const folded = !!orig.grow;
   const t0 = folded ? ({ ...orig, scale: orig.scale * orig.grow!, grow: undefined } as Tile) : orig;
@@ -58,6 +67,20 @@ export function resizeTile(orig: Tile, h0: number, handle: Handle, dx: number, d
     const ky = (h0 + (S ? ly : -ly)) / h0;
     const k = clamp((kx + ky) / 2, MIN_W / t0.w, 20);
     patch = { w: t0.w * k, scale: clamp(t0.scale * k, SCALE[0], SCALE[1]) };
+  } else if (t0.type === 'image' && ctx.crop === false) {
+    // Uncropped: the picture scales; find the width that gives the dragged size.
+    if (E || W) patch = { w: Math.max(MIN_W, t0.w + (E ? lx : -lx)) };
+    else {
+      const target = Math.max(3, h0 + (S ? ly : -ly));
+      let lo = MIN_W;
+      let hi = Math.max(t0.w * 20, MIN_W * 2);
+      for (let i = 0; i < 24; i++) {
+        const mid = (lo + hi) / 2;
+        if (height({ ...t0, w: mid } as Tile) < target) lo = mid;
+        else hi = mid;
+      }
+      patch = { w: (lo + hi) / 2 };
+    }
   } else if (E || W) {
     const w = Math.max(MIN_W, t0.w + (E ? lx : -lx));
     if (t0.type === 'image') {

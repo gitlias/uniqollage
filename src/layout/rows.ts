@@ -18,14 +18,15 @@ interface Fit {
   pen: number;
 }
 
-/** Pictures may be cropped to at most this factor from their own aspect ratio. */
+/** Pictures may be cropped to at most this factor from their own aspect ratio (1 = never). */
 const CROP = 1.8;
+const NO_CROP = 1.0001;
 
-function estimate(meter: Meter, t: Tile, b: number, H: number): Fit {
-  return meter.memo(t, `fit|${b}|${H}`, () => estimateNew(meter, t, b, H));
+function estimate(meter: Meter, t: Tile, b: number, H: number, crop: number): Fit {
+  return meter.memo(t, `fit|${b}|${H}|${crop}`, () => estimateNew(meter, t, b, H, crop));
 }
 
-function estimateNew(meter: Meter, t: Tile, b: number, H: number): Fit {
+function estimateNew(meter: Meter, t: Tile, b: number, H: number, crop: number): Fit {
   const p = profile(meter, t);
   const U = PROFILE_U;
   const hn = H / b;
@@ -40,7 +41,7 @@ function estimateNew(meter: Meter, t: Tile, b: number, H: number): Fit {
     else u = U[k - 1] + ((hn - p[k - 1]) / (p[k] - p[k - 1])) * (U[k] - U[k - 1]);
     const inset = meter.memo(t, 'inset', () => 4 * U[10] - imageParts(meter, t, 4 * U[10], 4).iw) / 4;
     const chrome = (w: number) => b * (profileAt(p, w / b) - (w / b - inset) / t.image.aspect);
-    return { ...cropRange(t.image.aspect, H, u * b, inset * b, chrome, U[low] * b), pen: 0 };
+    return { ...cropRange(t.image.aspect, H, u * b, inset * b, chrome, U[low] * b, crop), pen: 0 };
   }
   // Text gets shorter when wider; cards and infoboxes have pictures, so they can get taller again.
   const first = p.findIndex((v) => v <= hn);
@@ -66,17 +67,17 @@ function estimateNew(meter: Meter, t: Tile, b: number, H: number): Fit {
  * Widths at which a picture can be cut to exactly height H without cropping
  * beyond CROP (narrower pictures have taller captions, so this is searched).
  */
-function cropRange(a: number, H: number, nat: number, inset: number, chrome: (w: number) => number, lo: number): { min: number; nat: number; max: number } {
+function cropRange(a: number, H: number, nat: number, inset: number, chrome: (w: number) => number, lo: number, crop: number): { min: number; nat: number; max: number } {
   const ok = (w: number) => {
     const ih = H - chrome(w);
     if (ih <= 0) return false;
     const box = (w - inset) / ih;
-    return box >= a / CROP && box <= a * CROP;
+    return box >= a / crop && box <= a * crop;
   };
   // The caption alone is (nearly) as tall as the row.
   if (!ok(nat)) return { min: Infinity, nat: Infinity, max: Infinity };
   const min = minWhere(Math.min(lo, nat), nat, ok, 10) ?? nat;
-  const max = maxWhere(nat, nat * CROP * 2, ok, 10) ?? nat;
+  const max = maxWhere(nat, nat * crop * 2, ok, 10) ?? nat;
   return { min, nat, max };
 }
 
@@ -136,13 +137,13 @@ function partition(fits: Fit[], R: number, W: number, gap: number): RowPlan | nu
   return { R, H: 0, cuts, cost: best[R][n] };
 }
 
-function planRows(order: Tile[], area: Box, b: number, gap: number, meter: Meter): RowPlan | null {
+function planRows(order: Tile[], area: Box, b: number, gap: number, meter: Meter, crop: number): RowPlan | null {
   const maxRows = Math.min(order.length, Math.floor((area.h + gap) / (b * 3 + gap)));
   // Only row counts whose preferred widths roughly fill the rows are worth the partitioning.
   const options: { R: number; H: number; fits: Fit[]; fill: number }[] = [];
   for (let R = 1; R <= maxRows; R++) {
     const H = (area.h - (R - 1) * gap) / R;
-    const fits = order.map((t) => estimate(meter, t, b, H));
+    const fits = order.map((t) => estimate(meter, t, b, H, crop));
     const sum = fits.reduce((s, f) => s + (Number.isFinite(f.nat) ? f.nat : area.w * 2), 0) + (order.length - R) * gap;
     options.push({ R, H, fits, fill: Math.abs(Math.log(sum / (R * area.w))) });
   }
@@ -164,10 +165,13 @@ export interface RowsOptions {
   meter: Meter;
   /** Text size of a previous good candidate, to narrow the size search. */
   hint?: number;
+  /** Pictures may be cropped to fill their row exactly. */
+  crop: boolean;
 }
 
 export function rowsLayout(order: Tile[], area: Box, o: RowsOptions): ArrangeResult {
   const { meter } = o;
+  const crop = o.crop ? CROP : NO_CROP;
   const gapOf = (b: number) => o.gap ?? autoGap(b);
   const feasible = (p: RowPlan | null) => !!p && p.cost < 1000;
   let b = o.baseSize;
@@ -177,7 +181,7 @@ export function rowsLayout(order: Tile[], area: Box, o: RowsOptions): ArrangeRes
     let lo = 0.6;
     let hi = Math.min(area.w, area.h) / 6;
     let steps = 12;
-    const planAt = (v: number) => planRows(order, area, v, gapOf(v), meter);
+    const planAt = (v: number) => planRows(order, area, v, gapOf(v), meter, crop);
     if (o.hint && feasible(planAt(o.hint * 0.85)) && !feasible(planAt(Math.min(hi, o.hint * 1.2)))) {
       lo = o.hint * 0.85;
       hi = Math.min(hi, o.hint * 1.2);
@@ -185,26 +189,26 @@ export function rowsLayout(order: Tile[], area: Box, o: RowsOptions): ArrangeRes
     } else if (!feasible(planAt(lo))) hi = lo;
     for (let i = 0; i < steps && hi > lo; i++) {
       const mid = (lo + hi) / 2;
-      if (feasible(planRows(order, area, mid, gapOf(mid), meter))) lo = mid;
+      if (feasible(planAt(mid))) lo = mid;
       else hi = mid;
     }
     let best: { b: number; plan: RowPlan; score: number } | null = null;
     for (const f of [1, 0.95, 0.9, 0.85, 0.8, 0.7]) {
       const v = lo * f;
-      const p = planRows(order, area, v, gapOf(v), meter);
+      const p = planRows(order, area, v, gapOf(v), meter, crop);
       if (!p || !feasible(p)) continue;
       const score = Math.log(v) - p.cost / order.length;
       if (!best || score > best.score) best = { b: v, plan: p, score };
     }
     b = best?.b ?? lo;
-    plan = best?.plan ?? planRows(order, area, b, gapOf(b), meter);
-  } else plan = planRows(order, area, b, gapOf(b), meter);
+    plan = best?.plan ?? planRows(order, area, b, gapOf(b), meter, crop);
+  } else plan = planRows(order, area, b, gapOf(b), meter, crop);
   b = Math.floor(b * 1000) / 1000;
   let res = realize(order, area, plan, b, gapOf(b), o);
   // The plan works with estimated widths; if a row turns out too narrow for its text, try a little smaller.
   for (let i = 0; i < 8 && res.squeezed && o.autoSize; i++) {
     b = Math.floor(b * 0.93 * 1000) / 1000;
-    plan = planRows(order, area, b, gapOf(b), meter);
+    plan = planRows(order, area, b, gapOf(b), meter, crop);
     res = realize(order, area, plan, b, gapOf(b), o);
   }
   return { tiles: res.tiles, baseSize: b, overflow: res.overflow, badness: res.badness + (res.squeezed ? 1 : 0) };
@@ -224,7 +228,8 @@ function realize(
   const out: Tile[] = [];
   let y = area.y;
   let slack = 0;
-  let crop = 0;
+  let cropped = 0;
+  const crop = o.crop ? CROP : NO_CROP;
   let images = 0;
   const H = plan.H || area.h;
   for (let r = 0; r < plan.cuts.length - 1; r++) {
@@ -232,14 +237,21 @@ function realize(
     const inner = area.w - (row.length - 1) * gap;
     // Exact width ranges for this row.
     const fits = row.map((t) => {
-      const e = estimate(meter, t, b, H);
+      const e = estimate(meter, t, b, H, crop);
       if (t.type === 'image') {
         // Width at which the uncropped picture is exactly H tall (on the rising part of its profile).
         const p = profile(meter, t);
         const lo = PROFILE_U[p.indexOf(Math.min(...p))] * b;
-        const w = minWhere(lo, Math.max(lo, e.nat * 2, area.w), (v) => meter.h(t, v, b) >= H, 12) ?? lo;
+        const top = Math.max(lo, e.nat * 2, area.w);
+        if (!o.crop) {
+          // Uncropped: the widest picture that is not taller than the row.
+          const w = maxWhere(lo, top, (v) => meter.h(t, v, b) <= H, 24);
+          if (w === null) squeezed = true;
+          return { min: w ?? lo, nat: w ?? lo, max: w ?? lo };
+        }
+        const w = minWhere(lo, top, (v) => meter.h(t, v, b) >= H, 12) ?? lo;
         const inset = w - imageParts(meter, t, w, b).iw;
-        const range = cropRange(t.image.aspect, H, w, inset, (v) => imageParts(meter, t, v, b).chrome, lo);
+        const range = cropRange(t.image.aspect, H, w, inset, (v) => imageParts(meter, t, v, b).chrome, lo, crop);
         if (Number.isFinite(range.min)) return range;
         squeezed = true;
         return { min: w, nat: w, max: w };
@@ -298,9 +310,9 @@ function realize(
         // Cut the picture so the tile is exactly as tall as the row.
         const { iw, chrome } = imageParts(meter, t, w, b);
         const a = t.image.aspect;
-        const box = Math.min(a * CROP * (tight ? 3 : 1), Math.max(a / (CROP * (tight ? 3 : 1)), iw / Math.max(H - chrome, 1e-3)));
+        const box = Math.min(a * crop * (tight && o.crop ? 3 : 1), Math.max(a / (crop * (tight && o.crop ? 3 : 1)), iw / Math.max(H - chrome, 1e-3)));
         const nt = { ...t, boxAspect: box } as ImageTile;
-        crop += Math.abs(Math.log(box / a));
+        cropped += Math.abs(Math.log(box / a));
         images++;
         return { t: nt, h: meter.h(nt, w, b) };
       }
@@ -325,6 +337,6 @@ function realize(
     y += rowH + gap;
   }
   const overflow = y - gap > area.y + area.h + 1e-6;
-  const badness = (4 * slack) / (area.w * area.h) + (images ? (0.6 * crop) / images : 0) + Math.min(2, plan.cost / Math.max(1, order.length));
+  const badness = (4 * slack) / (area.w * area.h) + (images ? (0.6 * cropped) / images : 0) + Math.min(2, plan.cost / Math.max(1, order.length));
   return { tiles: out, overflow, badness, squeezed };
 }

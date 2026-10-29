@@ -108,7 +108,7 @@ export function Canvas() {
       patchTile(g.id, { x, y }, false);
     } else if (g.kind === 'resize') {
       const { baseSize, skin = 'vector2010' } = useStore.getState().project;
-      const ctx = { baseSize, skin };
+      const ctx = { baseSize, skin, crop: useStore.getState().project.cropImages !== false };
       let dx = p.x - g.sx;
       let dy = p.y - g.sy;
       let patch = resizeTile(g.t0, g.h0, g.handle, dx, dy, ctx);

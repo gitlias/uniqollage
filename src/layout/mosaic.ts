@@ -16,6 +16,8 @@ export interface MosaicOptions {
   /** Largest ratio between the biggest and smallest text size (≥ 1). */
   sizeRange: number;
   meter: Meter;
+  /** Pictures may be cropped to their cell (else they are shown whole, centred). */
+  crop: boolean;
 }
 
 export function mosaicLayout(order: Tile[], area: Box, o: MosaicOptions): ArrangeResult {
@@ -29,7 +31,10 @@ export function mosaicLayout(order: Tile[], area: Box, o: MosaicOptions): Arrang
     const u = naturalWidth(t);
     const h = profileAt(p, u);
     // (Pictures count a little less, so the text doesn't end up tiny.)
-    if (t.type === 'image') return { area: u * h * 0.6, lo: (u / h) * 0.85, hi: (u / h) * 1.15 };
+    if (t.type === 'image') {
+      const tol = o.crop ? 0.15 : 0.03;
+      return { area: u * h * 0.6, lo: (u / h) * (1 - tol), hi: (u / h) * (1 + tol) };
+    }
     const narrow = Math.max(u * 0.6, wordWidth(meter, t) * 1.2);
     const wide = u * (t.type === 'title' ? 4 : 2);
     return { area: u * h, lo: narrow / profileAt(p, narrow), hi: wide / profileAt(p, wide) };
@@ -166,20 +171,33 @@ export function mosaicLayout(order: Tile[], area: Box, o: MosaicOptions): Arrang
     }
     images++;
     const a = t.image.aspect;
+    // How far a picture may be cropped from its own aspect ratio.
+    const cf = o.crop ? 2.2 : 1;
     const { iw, chrome } = imageParts(meter, t, c.w, b);
     const ih = c.h - chrome;
-    if (ih <= iw / (a * 2.2)) {
+    if (!o.crop && ih >= iw / a) {
+      // Whole picture at full cell width; the rest of the cell stays empty.
+      const h = meter.h(t, c.w, b);
+      slack += c.w * (c.h - h);
+      return { ...t, x: c.x, y: c.y + c.h >= bottom ? c.y + c.h - h : c.y, w: c.w, rot: 0 } as Tile;
+    }
+    if (ih <= iw / (a * cf)) {
       // Cell too flat even for a strong crop: a narrower tile, centred. (Narrower
       // means a taller caption, so scan down rather than bisect.)
-      const flat = { ...t, boxAspect: a * 2.2 };
+      const flat = { ...t, boxAspect: o.crop ? a * cf : undefined };
       const fits = (v: number) => meter.h(flat, v, b) <= c.h;
       let w: number | null = null;
       for (let v = c.w * 0.88; v >= b * 3 && w === null; v *= 0.88) if (fits(v)) w = maxWhere(v, Math.min(c.w, v / 0.88), fits, 6) ?? v;
       if (w !== null) {
         const h = meter.h(flat, w, b);
         slack += c.w * c.h - w * h;
-        crop += Math.log(2.2);
+        crop += Math.log(cf);
         return { ...flat, x: c.x + (c.w - w) / 2, y: c.y, w, rot: 0 } as Tile;
+      }
+      if (!o.crop) {
+        // Not even the narrowest picture fits (its caption is too tall).
+        overflow = true;
+        return { ...t, x: c.x, y: c.y, w: c.w, rot: 0 } as Tile;
       }
       // Last resort: crop harder at full width (overflow only if the caption alone is too tall).
       if (ih <= 0) overflow = true;

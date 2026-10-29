@@ -60,3 +60,20 @@ describe('resizeTile', () => {
     expect(topLeft(t).y).toBeCloseTo(topLeft(r).y, 5);
   });
 });
+
+describe('resizeTile without cropping', () => {
+  const noCrop = { ...ctx, crop: false };
+  const drag = (t: Tile, handle: Parameters<typeof resizeTile>[2], dx: number, dy: number) => ({ ...t, ...resizeTile(t, h(t), handle, dx, dy, noCrop) }) as Tile;
+  it('side and top/bottom edges scale the picture instead of cropping it', () => {
+    const wider = drag(img, 'e', 15, 0) as ImageTile;
+    expect(wider.boxAspect).toBeUndefined();
+    expect(wider.w).toBeCloseTo(75);
+    expect(h(wider)).toBeGreaterThan(h(img));
+    const taller = drag(img, 's', 0, 12) as ImageTile;
+    expect(taller.boxAspect).toBeUndefined();
+    expect(h(taller)).toBeCloseTo(h(img) + 12, 1);
+    // The top edge keeps the bottom in place.
+    const up = drag(img, 'n', 0, -12) as ImageTile;
+    expect(up.y + h(up)).toBeCloseTo(img.y + h(img), 1);
+  });
+});

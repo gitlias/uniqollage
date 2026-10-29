@@ -1224,7 +1224,7 @@ button.add-like {
     white-space: nowrap;
   }
   /* Icons only, except for Shuffle. */
-  .toolbar .label {
+  .toolbar .btn-label {
     display: none;
   }
   .toolbar .icon {

@@ -367,6 +367,42 @@ await step('spacing and margin in the settings panel', async () => {
   await closeSettings();
 });
 
+await step('pictures uncropped, then reset settings', async () => {
+  // Displayed box ratio vs the picture's own ratio, for every picture on the canvas.
+  const ratios = () =>
+    page.locator('.canvas .tile image').evaluateAll((els) =>
+      Promise.all(
+        els.map(
+          (el) =>
+            new Promise((done) => {
+              const img = new Image();
+              img.onload = () => done((Number(el.getAttribute('width')) / Number(el.getAttribute('height'))) / (img.naturalWidth / img.naturalHeight));
+              img.onerror = () => done(1);
+              img.src = el.getAttribute('href');
+            }),
+        ),
+      ),
+    );
+  const crop = page.locator('.settings-panel label', { hasText: /Crop pictures|Bilder zuschneiden/ }).locator('input');
+  await openSettings();
+  await crop.uncheck();
+  await closeSettings();
+  const off = await ratios();
+  if (!off.length || off.some((r) => Math.abs(r - 1) > 0.02)) throw new Error(`pictures still cropped: ${off.map((r) => r.toFixed(2)).join(', ')}`);
+  await page.screenshot({ path: `${out}/uncropped.png` });
+  // Reset brings cropping (and the other defaults) back.
+  await openSettings();
+  await page.locator('.settings-panel button.reset-settings').click();
+  if (!(await crop.isChecked())) throw new Error('reset did not re-enable cropping');
+  if (!(await page.locator('.settings-panel label', { hasText: /Automatic spacing|Automatischer Abstand/ }).locator('input').isChecked())) throw new Error('reset did not restore automatic spacing');
+  await closeSettings();
+  await page.click('.toolbar button[aria-label="Undo"], .toolbar button[aria-label="Rückgängig"]');
+  await openSettings();
+  if (await crop.isChecked()) throw new Error('undo did not bring back the settings before the reset');
+  await crop.check();
+  await closeSettings();
+});
+
 await step('random fill from a category', async () => {
   await page.click('.toolbar button >> text=/Fill randomly|Zufällig füllen/');
   await page.waitForSelector('.modal .fill-types');

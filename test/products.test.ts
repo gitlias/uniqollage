@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { exportPixels, offerIn, printArea, productById, productsIn, PRODUCTS, sizeOf, UPLOAD_TARGETS } from '../src/products';
-import { emptyProject, migrate, normalize } from '../src/store';
+import { emptyProject, migrate, normalize, resetSettings } from '../src/store';
 import type { Project } from '../src/model';
 
 describe('products', () => {
@@ -59,5 +59,32 @@ describe('regions', () => {
     const de = normalize({ ...jp, region: 'de' });
     expect(de).toMatchObject({ productId: 'basic-t', sizeId: 'L', garment: 'white', theme: 'light' });
     expect(normalize({ ...emptyProject(), region: 'jp', sizeId: '3XL' }).sizeId).toBe('M');
+  });
+});
+
+describe('resetSettings', () => {
+  it('restores layout and look defaults but keeps what is printed on', () => {
+    const p = {
+      ...emptyProject(),
+      productId: 'tote',
+      sizeId: 'one',
+      garment: 'natural',
+      baseSize: 7,
+      autoSize: false,
+      gap: 9,
+      margins: 20,
+      neat: 1,
+      credit: false,
+      skin: 'minerva' as const,
+      arrangement: 'mosaic' as const,
+      optimize: { effort: 'thorough' as const },
+      cropImages: false,
+      reserve: [{ markup: 'x', source: { kind: 'upload' as const } }],
+    };
+    const r = resetSettings(p);
+    const d = emptyProject();
+    expect([r.productId, r.sizeId, r.garment, r.reserve]).toEqual([p.productId, p.sizeId, p.garment, p.reserve]);
+    expect([r.baseSize, r.autoSize, r.gap, r.margins, r.neat, r.credit, r.skin]).toEqual([d.baseSize, true, undefined, 0, undefined, true, 'vector2010']);
+    expect([r.arrangement, r.optimize, r.cropImages]).toEqual([undefined, undefined, undefined]);
   });
 });

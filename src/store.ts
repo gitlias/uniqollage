@@ -131,6 +131,7 @@ function relayout(p: Project, shuffle: boolean, explicit = false): Project {
     neat: p.neat,
     reserve: p.reserve,
     optimize,
+    cropImages: p.cropImages,
   });
   return { ...p, seed, tiles: res.tiles, baseSize: res.baseSize };
 }
@@ -246,6 +247,29 @@ export const useStore = create<State>((set, get) => ({
     set({ project: migrate(p), past: [], future: [], selected: null, autoLayout: false });
   },
 }));
+
+/**
+ * Layout and look settings back to their defaults. Kept: what is printed on
+ * (region, product, size, orientation, garment colour – the night mode
+ * follows it) and the collected filler sentences.
+ */
+export function resetSettings(p: Project): Project {
+  const d = emptyProject();
+  return {
+    ...p,
+    baseSize: d.baseSize,
+    autoSize: d.autoSize,
+    gap: undefined,
+    margins: productById(p.productId).shape === 'poster' ? 15 : 0,
+    neat: undefined,
+    credit: d.credit,
+    skin: d.skin,
+    theme: garmentColor(p.garment).dark ? 'dark' : 'light',
+    arrangement: undefined,
+    optimize: undefined,
+    cropImages: undefined,
+  };
+}
 
 /**
  * Re-run the layout after a setting change that affects it (product, size, credit strip).

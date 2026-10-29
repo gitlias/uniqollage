@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { randomFill } from '../wiki/randomFill';
-import { normalize, useStore, updateAndRelayout } from '../store';
+import { normalize, resetSettings, useStore, updateAndRelayout } from '../store';
 import { useUi } from '../ui';
 import { useT } from '../i18n';
 import type { Skin } from '../model';
@@ -255,6 +255,10 @@ export function SettingsPanel() {
             </div>
           </div>
         )}
+        <label className="check" title={t('cropImagesHint')}>
+          <input type="checkbox" checked={p.cropImages !== false} onChange={(e) => updateAndRelayout((x) => ({ ...x, cropImages: e.target.checked ? undefined : false }), true)} />{' '}
+          {t('cropImages')}
+        </label>
         <label className="check">
           <input type="checkbox" checked={p.credit} onChange={(e) => updateAndRelayout((x) => ({ ...x, credit: e.target.checked }))} /> {t('credit')}
         </label>
@@ -313,6 +317,20 @@ export function SettingsPanel() {
           <input type="checkbox" checked={snap} onChange={() => useUi.getState().toggleSnap()} /> {t('snap')}
         </label>
         <p className="muted small">{t('snapHint')}</p>
+      </section>
+
+      <section>
+        <button
+          className="reset-settings"
+          title={t('resetSettingsHint')}
+          onClick={() => {
+            updateAndRelayout(resetSettings, true);
+            if (!useUi.getState().snap) useUi.getState().toggleSnap();
+          }}
+        >
+          ↺ {t('resetSettings')}
+        </button>
+        <p className="muted small">{t('resetSettingsHint')}</p>
       </section>
     </div>
   );

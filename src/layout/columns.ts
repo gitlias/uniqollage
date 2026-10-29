@@ -33,7 +33,7 @@ interface Plan {
   cols: number;
 }
 
-function plan(order: Tile[], area: Box, b: number, fixedGap: number | undefined, seed: number, meter: Meter): Plan {
+function plan(order: Tile[], area: Box, b: number, fixedGap: number | undefined, seed: number, meter: Meter, crop: boolean): Plan {
   const gap = fixedGap ?? autoGap(b);
   const W = area.w;
   const r = rng(seed);
@@ -115,6 +115,8 @@ function plan(order: Tile[], area: Box, b: number, fixedGap: number | undefined,
       const widths = imgs.map((t) => (inner * t.image.aspect) / sum);
       const hs = imgs.map((t, i) => meter.h(t, widths[i], b));
       const H = hs.reduce((s, h) => s + h, 0) / hs.length;
+      // Without cropping the pictures keep their own height (the shorter ones leave a gap below).
+      if (!crop) return { kind: 'band', tiles: imgs, widths, h: Math.max(...hs) };
       const tiles = imgs.map((t, i) => {
         const { iw } = imageParts(meter, t, widths[i], b);
         const ih = Math.max(iw / t.image.aspect + (H - hs[i]), iw / (t.image.aspect * 2.5));
@@ -165,7 +167,7 @@ function fitColumn(
   b: number,
   gap: number,
   align: 'top' | 'bottom',
-  ctx: { meter: Meter; neat: number; pool: ReserveItem[]; r: () => number },
+  ctx: { meter: Meter; neat: number; pool: ReserveItem[]; r: () => number; crop: boolean },
 ): { placed: { t: Tile; dy: number }[]; excess: number } {
   const { meter, neat } = ctx;
   const col: Placed[] = tiles.map((t) => ({ t, h: meter.h(t, w, b) }));
@@ -173,7 +175,7 @@ function fitColumn(
   const even = gap; // gaps up to twice the spacing still look even
   let need = S - content() - even * (col.length - 1);
   if (need > b * 0.3) {
-    const maxGrow = 0.8 + 1.2 * neat;
+    const maxGrow = ctx.crop ? 0.8 + 1.2 * neat : 0;
     const imgs = col.filter((p) => p.t.type === 'image');
     const parts = imgs.map((p) => imageParts(meter, p.t as ImageTile, w, b));
     const capacity = parts.reduce((s, x, i) => s + (x.iw / (imgs[i].t as ImageTile).image.aspect) * maxGrow, 0);
@@ -234,6 +236,8 @@ export interface ColumnsOptions {
   meter: Meter;
   /** Text size of a previous good candidate, to narrow the size search. */
   hint?: number;
+  /** Pictures may be cropped to fill space. */
+  crop: boolean;
 }
 
 /** Largest body size at which `layout(b)` fits, by bisection (optionally around a hint). */
@@ -262,19 +266,19 @@ export function searchSize<T>(area: Box, fits: (b: number) => T | null, hint?: n
 export function columnsLayout(order: Tile[], area: Box, o: ColumnsOptions): ArrangeResult {
   let b = o.baseSize;
   if (o.autoSize) {
-    const found = searchSize(area, (v) => (plan(order, area, v, o.gap, o.seed, o.meter).height <= area.h ? true : null), o.hint);
+    const found = searchSize(area, (v) => (plan(order, area, v, o.gap, o.seed, o.meter, o.crop).height <= area.h ? true : null), o.hint);
     b = found?.b ?? 0.6;
   }
   // Round down so the plan made at the returned size still fits.
   b = Math.floor(b * 1000) / 1000;
-  const p = plan(order, area, b, o.gap, o.seed, o.meter);
+  const p = plan(order, area, b, o.gap, o.seed, o.meter, o.crop);
   const overflow = p.height > area.h + 1e-6;
   const G = Math.max(0, area.h - p.height);
   const sectionTotal = p.blocks.reduce((s, bl) => s + (bl.kind === 'section' ? bl.h : 0), 0);
   // Without sections (only bands) the extra height goes between the blocks.
   const blockGap = p.gap + (sectionTotal === 0 && p.blocks.length > 1 ? G / (p.blocks.length - 1) : 0);
   const used = new Set(order.map((t) => (t.type === 'text' ? t.markup : '')));
-  const ctx = { meter: o.meter, neat: o.neat, pool: o.reserve.filter((r) => !used.has(r.markup)), r: rng(o.seed + 101) };
+  const ctx = { meter: o.meter, neat: o.neat, pool: o.reserve.filter((r) => !used.has(r.markup)), r: rng(o.seed + 101), crop: o.crop };
 
   const out: Tile[] = [];
   let excess = 0;

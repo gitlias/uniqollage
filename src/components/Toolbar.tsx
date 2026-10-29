@@ -15,7 +15,7 @@ export function Toolbar() {
     <div className="toolbar">
       <div className="group">
         <button onClick={() => useUi.getState().setFillOpen(true)} title={t('fillRandom')}>
-          🎲 <span className="label">{t('fillRandom')}</span>
+          🎲 <span className="btn-label">{t('fillRandom')}</span>
         </button>
         <button className="primary" disabled={!p.tiles.length} onClick={() => s.arrange(true)}>
           {t('shuffle')}
@@ -24,7 +24,7 @@ export function Toolbar() {
           <span className="icon" aria-hidden>
             ⟳
           </span>
-          <span className="label">{t('arrange')}</span>
+          <span className="btn-label">{t('arrange')}</span>
         </button>
       </div>
       <div className="group">
@@ -41,7 +41,7 @@ export function Toolbar() {
           aria-expanded={settingsOpen}
           onClick={() => useUi.getState().setSettingsOpen(!settingsOpen)}
         >
-          ⚙ <span className="label">{t('settings')}</span>
+          ⚙ <span className="btn-label">{t('settings')}</span>
         </button>
         {settingsOpen && <SettingsPanel />}
       </div>

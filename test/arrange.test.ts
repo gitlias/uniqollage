@@ -140,3 +140,16 @@ describe('few tiles', () => {
     }
   });
 });
+
+describe('without cropping', () => {
+  for (const mode of ARRANGEMENTS)
+    it(`${mode}: shows every picture whole, without overlaps`, () => {
+      for (const n of [5, 16, 30]) {
+        const res = arrangeTiles(sample(n), area, { arrangement: mode, baseSize: 3, autoSize: true, seed: 8, cropImages: false });
+        for (const t of res.tiles) if (t.type === 'image' && t.boxAspect !== undefined) expect(t.boxAspect / t.image.aspect, `${mode} ${n}`).toBeCloseTo(1, 2);
+        const boxes = boxesOf(res.tiles, res.baseSize);
+        for (const b of boxes) expect(b.y + b.h, `${mode} ${n}`).toBeLessThanOrEqual(area.y + area.h + 1e-6);
+        for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j]), `${mode} ${n}: ${i}/${j}`).toBe(false);
+      }
+    });
+});

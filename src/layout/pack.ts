@@ -197,10 +197,10 @@ export function takeFiller(
  * taller, text-like tiles get slightly larger text) so columns end flush with
  * the bottom; remaining holes get small filler sentences from `reserve`.
  */
-function neaten(res: Attempt, area: Box, b: number, skin: Skin, neat: number, reserve: ReserveItem[], seed: number): Tile[] {
+function neaten(res: Attempt, area: Box, b: number, skin: Skin, neat: number, reserve: ReserveItem[], seed: number, crop: boolean): Tile[] {
   const bottom = area.h;
   const height = (t: Tile) => tileHeight(t, t.w, b, skin);
-  fillHoles(res, bottom, b, skin, 0.8 + neat * 1.2);
+  if (crop) fillHoles(res, bottom, b, skin, 0.8 + neat * 1.2);
   const maxGrow = 1 + neat * 0.3; // keep text sizes fairly even; fillers do the rest
   for (const s of res.slots) {
     if (s.tile.type === 'image') continue;
@@ -316,6 +316,8 @@ export function arrange(
     reserve?: ReserveItem[];
     /** Number of random span/tie variants to try (default 10). */
     variants?: number;
+    /** false: never crop pictures into free space. */
+    cropImages?: boolean;
   },
 ): ArrangeResult {
   const skin = opts.skin ?? 'vector2010';
@@ -359,11 +361,11 @@ export function arrange(
   const bOut = Math.floor(b * 1000) / 1000;
   const height = (t: Tile) => tileHeight(t, t.w, bOut, skin);
   if (neat > 0 && !overflow) {
-    const fillers = neaten(res, area, b, skin, neat, opts.reserve ?? [], opts.seed);
+    const fillers = neaten(res, area, b, skin, neat, opts.reserve ?? [], opts.seed, opts.cropImages !== false);
     const out = res.slots.map((s) => ({ ...s.tile, y: area.y + s.tile.y }));
     return { tiles: flushBottom([...out, ...fillers], area, height), baseSize: bOut, overflow, badness };
   }
-  fillHoles(res, res.height, b, skin);
+  if (opts.cropImages !== false) fillHoles(res, res.height, b, skin);
   // Spread rows vertically to use the full height (never creates overlaps:
   // scaling y by k ≥ 1 keeps every gap at least as large as before).
   // With a fixed spacing the gaps must stay exactly as set, so don't spread.
